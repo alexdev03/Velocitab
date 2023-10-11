@@ -23,11 +23,16 @@ import com.mojang.brigadier.Command;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.velocitypowered.api.command.BrigadierCommand;
 import com.velocitypowered.api.command.CommandSource;
+import com.velocitypowered.api.proxy.Player;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.TextColor;
 import net.william278.desertwell.about.AboutMenu;
 import net.william278.velocitab.Velocitab;
+import net.william278.velocitab.packet.tags.SpawnPacket;
+import net.william278.velocitab.packet.tags.UnlimitedTagPacket;
 import org.jetbrains.annotations.NotNull;
+
+import java.util.concurrent.TimeUnit;
 
 public final class VelocitabCommand {
     private static final TextColor MAIN_COLOR = TextColor.color(0x00FB9A);
@@ -63,6 +68,26 @@ public final class VelocitabCommand {
                     sendAboutInfo(ctx.getSource());
                     return Command.SINGLE_SUCCESS;
                 })
+                .then(LiteralArgumentBuilder.<CommandSource>literal("send")
+                        .executes(ctx -> {
+
+                            if (!(ctx.getSource() instanceof Player player)) {
+                                ctx.getSource().sendMessage(Component.text("You must be a player to use this command!", MAIN_COLOR));
+                                return Command.SINGLE_SUCCESS;
+                            }
+
+                            int randomId = (int) (Math.random() * 1000);
+
+                            SpawnPacket.send(plugin, player, randomId);
+                            plugin.getServer().getScheduler().buildTask(plugin, () -> {
+                                UnlimitedTagPacket.send(plugin, player, Component.text("Hello!"), randomId);
+
+                                ctx.getSource().sendMessage(Component.text("Sent packet with id " + randomId, MAIN_COLOR));
+                            }).delay(250, TimeUnit.MILLISECONDS).schedule();
+
+                            return Command.SINGLE_SUCCESS;
+                        })
+                )
                 .then(LiteralArgumentBuilder.<CommandSource>literal("about")
                         .executes(ctx -> {
                             sendAboutInfo(ctx.getSource());
@@ -91,7 +116,7 @@ public final class VelocitabCommand {
                                 }
                                 ctx.getSource().sendMessage(Component
                                         .text("An update for velocitab is available. " +
-                                              "Please update to " + checked.getLatestVersion(), MAIN_COLOR));
+                                                "Please update to " + checked.getLatestVersion(), MAIN_COLOR));
                             });
                             return Command.SINGLE_SUCCESS;
                         })

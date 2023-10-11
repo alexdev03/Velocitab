@@ -24,9 +24,12 @@ import com.velocitypowered.api.proxy.Player;
 import com.velocitypowered.api.proxy.ServerConnection;
 import com.velocitypowered.api.proxy.server.RegisteredServer;
 import com.velocitypowered.proxy.connection.client.ConnectedPlayer;
+import com.velocitypowered.proxy.protocol.MinecraftPacket;
 import com.velocitypowered.proxy.protocol.ProtocolUtils;
 import com.velocitypowered.proxy.protocol.StateRegistry;
 import net.william278.velocitab.Velocitab;
+import net.william278.velocitab.packet.tags.SpawnPacket;
+import net.william278.velocitab.packet.tags.UnlimitedTagPacket;
 import net.william278.velocitab.player.TabPlayer;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.event.Level;
@@ -39,6 +42,8 @@ import static com.velocitypowered.api.network.ProtocolVersion.*;
 public class ScoreboardManager {
 
     private PacketRegistration<UpdateTeamsPacket> packetRegistration;
+    private PacketRegistration<SpawnPacket> spawnPacketRegistration;
+    private PacketRegistration<UnlimitedTagPacket> unlimitedTagPacketRegistration;
     private final Velocitab plugin;
     private final Set<TeamsPacketAdapter> versions;
     private final Map<UUID, String> createdTeams;
@@ -95,8 +100,8 @@ public class ScoreboardManager {
                 createdTeams.put(player.getUniqueId(), role);
                 this.nametags.put(role, prefix + ":::" + suffix);
                 dispatchGroupPacket(UpdateTeamsPacket.create(plugin, role, "", prefix, suffix, name), player);
-            } else if (!this.nametags.getOrDefault(role, "").equals(prefix  + ":::" + suffix)) {
-                this.nametags.put(role, prefix  + ":::" + suffix);
+            } else if (!this.nametags.getOrDefault(role, "").equals(prefix + ":::" + suffix)) {
+                this.nametags.put(role, prefix + ":::" + suffix);
                 dispatchGroupPacket(UpdateTeamsPacket.changeNameTag(plugin, role, prefix, suffix), player);
             }
         }).exceptionally(e -> {
@@ -108,7 +113,7 @@ public class ScoreboardManager {
 
     public void resendAllNameTags(Player player) {
 
-        if(!plugin.getSettings().areNametagsEnabled()) {
+        if (!plugin.getSettings().areNametagsEnabled()) {
             return;
         }
 
@@ -199,6 +204,24 @@ public class ScoreboardManager {
                     .mapping(0x56, MINECRAFT_1_19_3, true)
                     .mapping(0x5A, MINECRAFT_1_19_4, true);
             packetRegistration.register();
+
+
+            spawnPacketRegistration = PacketRegistration.of(SpawnPacket.class)
+                    .direction(ProtocolUtils.Direction.CLIENTBOUND)
+                    .packetSupplier(() -> new SpawnPacket(plugin))
+                    .stateRegistry(StateRegistry.PLAY)
+                    .mapping(0x01, MINECRAFT_1_20, true);
+            spawnPacketRegistration.register();
+
+            unlimitedTagPacketRegistration = PacketRegistration.of(UnlimitedTagPacket.class)
+                    .direction(ProtocolUtils.Direction.CLIENTBOUND)
+                    .packetSupplier(() -> new UnlimitedTagPacket(plugin))
+                    .stateRegistry(StateRegistry.PLAY)
+                    .mapping(0x52, MINECRAFT_1_19_4, true)
+                    .mapping(0x52, MINECRAFT_1_20, true)
+            ;
+            unlimitedTagPacketRegistration.register();
+
         } catch (Throwable e) {
             plugin.log(Level.ERROR, "Failed to register UpdateTeamsPacket", e);
         }
@@ -210,6 +233,8 @@ public class ScoreboardManager {
         }
         try {
             packetRegistration.unregister();
+            spawnPacketRegistration.unregister();
+            unlimitedTagPacketRegistration.unregister();
         } catch (Throwable e) {
             plugin.log(Level.ERROR, "Failed to unregister UpdateTeamsPacket", e);
         }

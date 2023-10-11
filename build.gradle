@@ -2,7 +2,7 @@ import org.apache.tools.ant.filters.ReplaceTokens
 
 plugins {
     id 'com.github.johnrengelman.shadow' version '8.1.1'
-    id 'org.cadixdev.licenser' version '0.6.1'
+//    id 'org.cadixdev.licenser' version '0.6.1'
     id 'org.ajoberstar.grgit' version '5.2.0'
     id 'java'
 }
@@ -55,11 +55,11 @@ processResources {
     }
 }
 
-license {
-    header = rootProject.file('HEADER')
-    include '**/*.java'
-    newLine = true
-}
+//license {
+//    header = rootProject.file('HEADER')
+//    include '**/*.java'
+//    newLine = true
+//}
 
 logger.lifecycle("Building Velocitab ${version} by William278")
 
