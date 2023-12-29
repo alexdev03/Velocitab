@@ -19,6 +19,7 @@
 
 package net.william278.velocitab;
 
+import com.github.retrooper.packetevents.PacketEvents;
 import com.google.inject.Inject;
 import com.velocitypowered.api.command.BrigadierCommand;
 import com.velocitypowered.api.event.Subscribe;
@@ -110,6 +111,7 @@ public class Velocitab implements ConfigProvider, ScoreboardProvider, LoggerProv
         disableScoreboardManager();
         getLuckPermsHook().ifPresent(LuckPermsHook::closeEvent);
         VelocitabAPI.unregister();
+        PacketEvents.getAPI().terminate();
         logger.info("Successfully disabled Velocitab");
     }
 

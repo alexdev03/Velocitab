@@ -19,9 +19,22 @@
 
 package net.william278.velocitab.tab;
 
+import com.github.retrooper.packetevents.PacketEvents;
+import com.github.retrooper.packetevents.PacketEventsAPI;
+import com.github.retrooper.packetevents.event.PacketListenerAbstract;
+import com.github.retrooper.packetevents.event.PacketListenerPriority;
+import com.github.retrooper.packetevents.event.PacketReceiveEvent;
+import com.github.retrooper.packetevents.event.PacketSendEvent;
+import com.github.retrooper.packetevents.protocol.packettype.PacketType;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerPlayerInfoUpdate;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
 import com.velocitypowered.api.event.PostOrder;
 import com.velocitypowered.api.event.Subscribe;
+import com.velocitypowered.api.event.connection.ConnectionHandshakeEvent;
 import com.velocitypowered.api.event.connection.DisconnectEvent;
+import com.velocitypowered.api.event.connection.LoginEvent;
+import com.velocitypowered.api.event.connection.PreLoginEvent;
 import com.velocitypowered.api.event.player.KickedFromServerEvent;
 import com.velocitypowered.api.event.player.ServerPostConnectEvent;
 import com.velocitypowered.api.event.proxy.ProxyReloadEvent;
@@ -32,6 +45,7 @@ import com.velocitypowered.api.proxy.player.TabListEntry;
 import com.velocitypowered.api.proxy.server.RegisteredServer;
 import com.velocitypowered.api.proxy.server.ServerInfo;
 import com.velocitypowered.api.scheduler.ScheduledTask;
+import io.github.retrooper.packetevents.velocity.factory.VelocityPacketEventsBuilder;
 import net.kyori.adventure.text.Component;
 import net.william278.velocitab.Velocitab;
 import net.william278.velocitab.api.PlayerAddedToTabEvent;
@@ -44,8 +58,6 @@ import org.slf4j.event.Level;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -53,17 +65,19 @@ import java.util.concurrent.TimeUnit;
  */
 public class PlayerTabList {
     private final Velocitab plugin;
-    private final ConcurrentHashMap<UUID, TabPlayer> players;
+    private final Map<UUID, TabPlayer> players;
     private final List<UUID> justKicked;
     private final Map<Group, ScheduledTask> placeholderTasks;
     private final Map<Group, ScheduledTask> headerFooterTasks;
+    private final boolean onlineMode;
 
     public PlayerTabList(@NotNull Velocitab plugin) {
         this.plugin = plugin;
-        this.players = new ConcurrentHashMap<>();
-        this.justKicked = new CopyOnWriteArrayList<>();
-        this.placeholderTasks = new ConcurrentHashMap<>();
-        this.headerFooterTasks = new ConcurrentHashMap<>();
+        this.players = Maps.newConcurrentMap();
+        this.justKicked = Lists.newCopyOnWriteArrayList();
+        this.placeholderTasks = Maps.newConcurrentMap();
+        this.headerFooterTasks = Maps.newConcurrentMap();
+        this.onlineMode = plugin.getServer().getConfiguration().isOnlineMode();
         this.reloadUpdate();
     }
 
@@ -132,6 +146,11 @@ public class PlayerTabList {
         justKicked.add(event.getPlayer().getUniqueId());
     }
 
+    @Subscribe(order = PostOrder.FIRST)
+    public void onLogin(LoginEvent event) {
+        System.out.println(event.getPlayer().getUsername() + " logged in with uuid " + event.getPlayer().getUniqueId());
+    }
+
     @SuppressWarnings("UnstableApiUsage")
     @Subscribe
     public void onPlayerJoin(@NotNull ServerPostConnectEvent event) {
@@ -156,18 +175,42 @@ public class PlayerTabList {
         joinPlayer(joined, group);
     }
 
+    private void fixDuplicateEntries(@NotNull Player player) {
+        int times = 0;
+        for (TabListEntry entry : player.getTabList().getEntries()) {
+            if (entry.getProfile().getId().equals(player.getUniqueId())) {
+                times++;
+                if (times > 1) {
+                    player.getTabList().removeEntry(player.getUniqueId());
+                    System.out.println("Removed duplicate entry for " + player.getUsername());
+                }
+            }
+        }
+    }
+
     private void joinPlayer(@NotNull Player joined, @NotNull Group group) {
         // Add the player to the tracking list if they are not already listed
         final TabPlayer tabPlayer = getTabPlayer(joined).orElseGet(() -> createTabPlayer(joined, group));
         tabPlayer.setGroup(group);
         players.putIfAbsent(joined.getUniqueId(), tabPlayer);
 
-        int delay = 500;
+        int delay = 100;
 
         if (justKicked.contains(joined.getUniqueId())) {
             delay = 1000;
             justKicked.remove(joined.getUniqueId());
         }
+
+//        if(true) return;
+
+        // This should fix the issue where on a cracked proxy some players could see themselves twice in the tab list
+//        if (!onlineMode) {
+//            fixDuplicateEntries(joined);
+//        }
+        joined.getTabList().getEntries()
+                .forEach(entry -> {
+                    System.out.println("name: " + entry.getProfile().getName() + " id: " + entry.getProfile().getId());
+                });
 
         //store last server, so it's possible to have the last server on disconnect
         tabPlayer.setLastServer(joined.getCurrentServer().map(ServerConnection::getServerInfo).map(ServerInfo::getName).orElse(""));
@@ -180,6 +223,9 @@ public class PlayerTabList {
                 .buildTask(plugin, () -> {
                     final TabList tabList = joined.getTabList();
                     for (final TabPlayer player : players.values()) {
+
+                        player.sendHeaderAndFooter(this);
+
                         // Skip players on other servers if the setting is enabled
                         if (plugin.getSettings().isOnlyListPlayersInSameGroup()
                                 && !isFallback &&
@@ -189,8 +235,10 @@ public class PlayerTabList {
                             continue;
                         }
                         // check if current player can see the joined player
-                        if (!isVanished || plugin.getVanishManager().canSee(player.getPlayer().getUsername(), joined.getUsername())) {
+                        if ((!isVanished || plugin.getVanishManager().canSee(player.getPlayer().getUsername(), joined.getUsername()))
+                                && player.getPlayer() != joined) {
                             addPlayerToTabList(player, tabPlayer);
+                            System.out.println("Added " + joined.getUsername() + " to " + player.getPlayer().getUsername() + "'s tab list");
                         } else {
                             player.getPlayer().getTabList().removeEntry(joined.getUniqueId());
                         }
@@ -199,18 +247,32 @@ public class PlayerTabList {
                                 !plugin.getVanishManager().canSee(joined.getUsername(), player.getPlayer().getUsername())) && player.getPlayer() != joined) {
                             tabList.removeEntry(player.getPlayer().getUniqueId());
                         } else {
-                            tabList.getEntry(player.getPlayer().getUniqueId()).ifPresentOrElse(
+//                            if (!onlineMode &&
+//                                    tabList.getEntries()
+//                                            .stream()
+//                                            .anyMatch(e -> e.getProfile().getId().equals(player.getPlayer().getUniqueId()))
+//                            ) {
+//                                continue;
+//                            }
+                            Optional<TabListEntry> listEntry = tabList.getEntries()
+                                    .stream()
+                                    .filter(e -> e.getProfile().getId().equals(player.getPlayer().getUniqueId()))
+                                    .findFirst();
+                            System.out.println(joined.getUniqueId());
+                            listEntry.ifPresent(e -> System.out.println("Found entry for " + player.getPlayer().getUsername() + " id: " + e.getProfile().getId()));
+                            //tabList.getEntry(player.getPlayer().getUniqueId())
+                            System.out.println(listEntry);
+                            listEntry.ifPresentOrElse(
                                     entry -> player.getDisplayName(plugin).thenAccept(entry::setDisplayName)
                                             .exceptionally(throwable -> {
                                                 plugin.log(Level.ERROR, String.format("Failed to set display name for %s (UUID: %s)",
                                                         player.getPlayer().getUsername(), player.getPlayer().getUniqueId()), throwable);
                                                 return null;
                                             }),
-                                    () -> createEntry(player, tabList).thenAccept(tabList::addEntry)
+                                    () -> createEntry(player, tabList).thenAccept(t -> t.ifPresent(tabList::addEntry))
                             );
                         }
 
-                        player.sendHeaderAndFooter(this);
                     }
 
                     plugin.getScoreboardManager().ifPresent(s -> {
@@ -226,13 +288,18 @@ public class PlayerTabList {
     }
 
     @NotNull
-    private CompletableFuture<TabListEntry> createEntry(@NotNull TabPlayer player, @NotNull TabList tabList) {
-        return player.getDisplayName(plugin).thenApply(name -> TabListEntry.builder()
+    private CompletableFuture<Optional<TabListEntry>> createEntry(@NotNull TabPlayer player, @NotNull TabList tabList) {
+        System.out.println("Creating entry for " + player.getPlayer().getUsername());
+        if (tabList.containsEntry(player.getPlayer().getUniqueId())) {
+            return CompletableFuture.completedFuture(Optional.empty());
+        }
+
+        return player.getDisplayName(plugin).thenApply(name -> Optional.of(TabListEntry.builder()
                 .profile(player.getPlayer().getGameProfile())
                 .displayName(name)
                 .latency(0)
                 .tabList(tabList)
-                .build());
+                .build()));
     }
 
     private TabListEntry createEntry(@NotNull TabPlayer player, @NotNull TabList tabList, @NotNull Component displayName) {
@@ -255,7 +322,7 @@ public class PlayerTabList {
                 .ifPresentOrElse(
                         entry -> newPlayer.getDisplayName(plugin).thenAccept(entry::setDisplayName),
                         () -> createEntry(newPlayer, player.getPlayer().getTabList())
-                                .thenAccept(entry -> player.getPlayer().getTabList().addEntry(entry))
+                                .thenAccept(entry -> entry.ifPresent(player.getPlayer().getTabList()::addEntry))
                 );
 
     }
@@ -534,7 +601,7 @@ public class PlayerTabList {
             } else {
                 if (!player.getTabList().containsEntry(p.getUniqueId())) {
                     createEntry(target, player.getTabList()).thenAccept(e -> {
-                        player.getTabList().addEntry(e);
+                        e.ifPresent(tabListEntry -> player.getTabList().addEntry(tabListEntry));
                         plugin.getScoreboardManager().ifPresent(s -> s.recalculateVanishForPlayer(tabPlayer, target, true));
                     });
                 }
