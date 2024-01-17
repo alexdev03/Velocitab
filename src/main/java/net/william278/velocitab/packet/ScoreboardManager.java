@@ -28,16 +28,22 @@ import com.velocitypowered.api.proxy.server.RegisteredServer;
 import com.velocitypowered.proxy.connection.client.ConnectedPlayer;
 import com.velocitypowered.proxy.protocol.ProtocolUtils;
 import com.velocitypowered.proxy.protocol.StateRegistry;
+import com.velocitypowered.proxy.tablist.VelocityTabListEntry;
+import net.kyori.adventure.text.Component;
 import net.william278.velocitab.Velocitab;
 import net.william278.velocitab.config.Group;
 import net.william278.velocitab.player.TabPlayer;
+import net.william278.velocitab.sorting.MorePlayersManager;
 import net.william278.velocitab.tab.Nametag;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.event.Level;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collector;
 
 import static com.velocitypowered.api.network.ProtocolVersion.*;
+import static net.william278.velocitab.sorting.MorePlayersManager.MAX_PLAYERS;
 
 public class ScoreboardManager {
 
@@ -46,6 +52,7 @@ public class ScoreboardManager {
     private final Set<TeamsPacketAdapter> versions;
     private final Map<UUID, String> createdTeams;
     private final Map<String, Nametag> nametags;
+    private final MorePlayersManager morePlayersManager;
 
     public ScoreboardManager(@NotNull Velocitab velocitab) {
         this.plugin = velocitab;
@@ -53,6 +60,7 @@ public class ScoreboardManager {
         this.nametags = Maps.newConcurrentMap();
         this.versions = Sets.newHashSet();
         this.registerVersions();
+        this.morePlayersManager = new MorePlayersManager(plugin, this);
     }
 
     private void registerVersions() {
@@ -64,6 +72,46 @@ public class ScoreboardManager {
         } catch (NoSuchFieldError e) {
             throw new IllegalStateException("Failed to register scoreboard packet adapters. Try to update velocity to latest build", e);
         }
+    }
+
+    private void recalculateMorePlayers(@NotNull Group group) {
+//        if(true) return;
+        final List<Player> tabPlayers = group.getPlayers(plugin).stream().filter(Player::isActive).toList();
+        morePlayersManager.getFakeTeam(group).ifPresent(t -> {
+            final UpdateTeamsPacket packet = UpdateTeamsPacket.removeTeam(plugin, t.team());
+            dispatchGroupPacket(packet, group);
+            tabPlayers.forEach(tP -> tP.getTabList().removeEntry(t.entry().getProfile().getId()));
+            morePlayersManager.removeFakeTeam(group);
+        });
+        if (tabPlayers.size() <= MAX_PLAYERS) {
+            return;
+        }
+
+        final String more = "&cAnd " + (tabPlayers.size() - MAX_PLAYERS) + " more...";
+        final Component component = plugin.getFormatter().emptyFormat(more);
+        final MorePlayersManager.FakePlayer fakePlayer = morePlayersManager.recalucateFakeTeam(group);
+        final UpdateTeamsPacket packet = UpdateTeamsPacket.create(plugin, null, fakePlayer.team(), new Nametag("", ""), fakePlayer.entry().getProfile().getName());
+        dispatchGroupPacket(packet, group);
+        final VelocityTabListEntry entry = fakePlayer.entry(component);
+        tabPlayers.forEach(tP -> tP.getTabList().addEntry(entry));
+    }
+
+    @NotNull
+    public Map<UUID, String> getTeams(@NotNull Group group) {
+        final List<UUID> uuids = group.getTabPlayers(plugin).stream()
+                .map(t -> t.getPlayer().getUniqueId())
+                .toList();
+
+        return createdTeams.entrySet().stream()
+                .filter(entry -> uuids.contains(entry.getKey()))
+                .collect(Collector.of(
+                        ConcurrentHashMap::new,
+                        (map, entry) -> map.put(entry.getKey(), entry.getValue()),
+                        (map1, map2) -> {
+                            map1.putAll(map2);
+                            return map1;
+                        }
+                ));
     }
 
     @NotNull
@@ -83,6 +131,7 @@ public class ScoreboardManager {
         if (team != null) {
             final TabPlayer tabPlayer = plugin.getTabList().getTabPlayer(player).orElseThrow();
             dispatchGroupPacket(UpdateTeamsPacket.removeTeam(plugin, team), tabPlayer);
+            recalculateMorePlayers(tabPlayer.getGroup());
         }
     }
 
@@ -90,6 +139,7 @@ public class ScoreboardManager {
         final String team = createdTeams.remove(player.getUniqueId());
         if (team != null) {
             dispatchGroupPacket(UpdateTeamsPacket.removeTeam(plugin, team), group);
+            recalculateMorePlayers(group);
         }
     }
 
@@ -145,6 +195,7 @@ public class ScoreboardManager {
                             UpdateTeamsPacket.removeTeam(plugin, createdTeams.get(player.getUniqueId())),
                             tabPlayer
                     );
+                    recalculateMorePlayers(tabPlayer.getGroup());
                 }
 
                 createdTeams.put(player.getUniqueId(), role);
@@ -153,6 +204,7 @@ public class ScoreboardManager {
                         UpdateTeamsPacket.create(plugin, tabPlayer, role, newTag, name),
                         tabPlayer
                 );
+                recalculateMorePlayers(tabPlayer.getGroup());
             } else if (force || (this.nametags.containsKey(role) && !this.nametags.get(role).equals(newTag))) {
                 this.nametags.put(role, newTag);
                 dispatchGroupPacket(

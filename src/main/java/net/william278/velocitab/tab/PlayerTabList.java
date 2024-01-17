@@ -28,8 +28,11 @@ import com.velocitypowered.api.proxy.player.TabListEntry;
 import com.velocitypowered.api.proxy.server.RegisteredServer;
 import com.velocitypowered.api.proxy.server.ServerInfo;
 import com.velocitypowered.api.scheduler.ScheduledTask;
+import com.velocitypowered.proxy.tablist.VelocityTabList;
+import com.velocitypowered.proxy.tablist.VelocityTabListEntry;
 import lombok.AccessLevel;
 import lombok.Getter;
+import lombok.SneakyThrows;
 import net.kyori.adventure.text.Component;
 import net.william278.velocitab.Velocitab;
 import net.william278.velocitab.api.PlayerAddedToTabEvent;
@@ -40,6 +43,7 @@ import net.william278.velocitab.player.TabPlayer;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.event.Level;
 
+import java.lang.reflect.Field;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -137,6 +141,26 @@ public class PlayerTabList {
             serversInGroup.remove(server.get().getServer());
             serversInGroup.forEach(s -> s.getPlayersConnected().forEach(t -> t.getTabList().removeEntry(p.getUniqueId())));
         });
+    }
+
+    /**
+     * Fixes the tab list for the given player as the map is not concurrent.
+     *
+     * @param player The player for which to fix the tab list.
+     */
+    @SneakyThrows
+    @SuppressWarnings("unchecked")
+    protected void fixTabList(@NotNull Player player) {
+        if (!(player.getTabList() instanceof VelocityTabList velocityTabList)) {
+            return;
+        }
+
+        final Map<UUID, VelocityTabListEntry> entries = Maps.newConcurrentMap();
+
+        final Field entriesField = VelocityTabList.class.getDeclaredField("entries");
+        entriesField.setAccessible(true);
+        entries.putAll((Map<UUID, VelocityTabListEntry>) entriesField.get(velocityTabList));
+        entriesField.set(velocityTabList, entries);
     }
 
 

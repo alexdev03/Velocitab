@@ -65,7 +65,7 @@ public class UpdateTeamsPacket implements MinecraftPacket {
     }
 
     @NotNull
-    protected static UpdateTeamsPacket create(@NotNull Velocitab plugin, @NotNull TabPlayer tabPlayer,
+    protected static UpdateTeamsPacket create(@NotNull Velocitab plugin, @Nullable TabPlayer tabPlayer,
                                               @NotNull String teamName,
                                               @NotNull Nametag nametag,
                                               @NotNull String... teamMembers) {
@@ -77,8 +77,8 @@ public class UpdateTeamsPacket implements MinecraftPacket {
                 .nametagVisibility(isNametagPresent(nametag, plugin) ? NametagVisibility.ALWAYS : NametagVisibility.NEVER)
                 .collisionRule(CollisionRule.ALWAYS)
                 .color(getLastColor(nametag.prefix(), plugin))
-                .prefix(nametag.getPrefixComponent(plugin, tabPlayer))
-                .suffix(nametag.getSuffixComponent(plugin, tabPlayer))
+                .prefix(tabPlayer != null ? nametag.getPrefixComponent(plugin, tabPlayer) : Component.empty())
+                .suffix(tabPlayer != null ? nametag.getSuffixComponent(plugin, tabPlayer) : Component.empty())
                 .entities(Arrays.asList(teamMembers));
     }
 

@@ -43,7 +43,6 @@ public class PlayerChannelHandler extends ChannelDuplexHandler {
             return;
         }
 
-
         if (plugin.getSettings().isRemoveSpectatorEffect() && minecraftPacket.containsAction(UpsertPlayerInfo.Action.UPDATE_GAME_MODE)) {
             forceGameMode(minecraftPacket.getEntries());
         }

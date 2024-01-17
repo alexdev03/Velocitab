@@ -52,8 +52,8 @@ public class PacketEventManager {
     public PacketEventManager(@NotNull Velocitab plugin) {
         this.plugin = plugin;
         this.velocitabEntries = Sets.newConcurrentHashSet();
-        this.loadPlayers();
-        this.loadListeners();
+//        this.loadPlayers();
+//        this.loadListeners();
     }
 
     private void loadPlayers() {
