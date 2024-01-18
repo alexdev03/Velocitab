@@ -32,7 +32,7 @@ import java.util.*;
 
 public class MorePlayersManager {
 
-    public static final int MAX_PLAYERS = 1;
+    public static final int MAX_PLAYERS = 80;
     private VelocityTabListEntry fakePlayer;
     private final Velocitab plugin;
     private Map<Group, String> fakeTeams;
