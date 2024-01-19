@@ -93,12 +93,18 @@ public class ScoreboardManager {
         final UpdateTeamsPacket packet = UpdateTeamsPacket.create(plugin, null, fakePlayer.team(), new Nametag("", ""), fakePlayer.entry().getProfile().getName());
         dispatchGroupPacket(packet, group);
         final VelocityTabListEntry entry = fakePlayer.entry(component);
-        tabPlayers.forEach(tP -> tP.getTabList().addEntry(entry));
+        tabPlayers.forEach(tP -> {
+            if (tP.getUsername().equalsIgnoreCase("AlexDev_")) {
+                System.out.println("Adding " + entry.getProfile().getName() + " to " + tP.getUsername());
+            }
+            tP.getTabList().addEntry(entry);
+        });
     }
 
     @NotNull
     public Map<UUID, String> getTeams(@NotNull Group group) {
         final List<UUID> uuids = group.getTabPlayers(plugin).stream()
+                .filter(TabPlayer::isLoaded)
                 .map(t -> t.getPlayer().getUniqueId())
                 .toList();
 
@@ -195,7 +201,6 @@ public class ScoreboardManager {
                             UpdateTeamsPacket.removeTeam(plugin, createdTeams.get(player.getUniqueId())),
                             tabPlayer
                     );
-                    recalculateMorePlayers(tabPlayer.getGroup());
                 }
 
                 createdTeams.put(player.getUniqueId(), role);

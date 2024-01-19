@@ -155,6 +155,8 @@ public class PlayerTabList {
             return;
         }
 
+//        if (true) return;
+
         final Map<UUID, VelocityTabListEntry> entries = Maps.newConcurrentMap();
 
         final Field entriesField = VelocityTabList.class.getDeclaredField("entries");
