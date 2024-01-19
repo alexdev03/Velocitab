@@ -25,13 +25,16 @@ repositories {
     maven { url = 'https://repo.papermc.io/repository/maven-public/' }
     maven { url = 'https://repo.william278.net/releases/' }
     maven { url = 'https://repo.william278.net/velocity/' }
+    maven { url = 'https://maven.elytrium.net/repo/' }
     maven { url = 'https://jitpack.io/' }
     maven { url = 'https://repo.minebench.de/' }
-    maven { url = 'https://maven.elytrium.net/repo/' }
     maven { url = 'https://mvn.exceptionflug.de/repository/exceptionflug-public/' }
 }
 
 dependencies {
+    //temp
+//    compileOnly files('libraries/velocity-3.3.0-SNAPSHOT-330.jar')
+
     compileOnly 'com.velocitypowered:velocity-api:3.3.0-SNAPSHOT'
     compileOnly 'com.velocitypowered:velocity-proxy:3.3.0-SNAPSHOT'
     compileOnly 'io.netty:netty-codec-http:4.1.105.Final'
