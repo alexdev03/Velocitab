@@ -87,8 +87,6 @@ public class ScoreboardManager {
             return;
         }
 
-        System.out.println("Recalculating more players for " + group.name());
-
         final String more = "&cAnd " + (tabPlayers.size() - MAX_PLAYERS) + " more...";
         final Component component = plugin.getFormatter().emptyFormat(more);
         final MorePlayersManager.FakePlayer fakePlayer = morePlayersManager.recalucateFakeTeam(group);
