@@ -28,7 +28,6 @@ import lombok.RequiredArgsConstructor;
 import net.william278.velocitab.Velocitab;
 import org.jetbrains.annotations.NotNull;
 
-import java.util.List;
 
 @RequiredArgsConstructor
 public class PlayerChannelHandler extends ChannelDuplexHandler {
