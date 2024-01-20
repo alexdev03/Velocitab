@@ -30,6 +30,8 @@ import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
 
+import static net.william278.velocitab.packet.PacketEventManager.CITIZENS_PREFIX;
+
 
 @RequiredArgsConstructor
 public class PlayerChannelHandler extends ChannelDuplexHandler {
@@ -44,7 +46,6 @@ public class PlayerChannelHandler extends ChannelDuplexHandler {
             return;
         }
 
-
         if (plugin.getSettings().isRemoveSpectatorEffect() && minecraftPacket.containsAction(UpsertPlayerInfoPacket.Action.UPDATE_GAME_MODE)) {
             forceGameMode(minecraftPacket.getEntries());
         }
@@ -54,10 +55,11 @@ public class PlayerChannelHandler extends ChannelDuplexHandler {
             return;
         }
 
-        if (minecraftPacket.getEntries().stream().allMatch(entry -> entry.getProfile() != null && entry.getProfile().getName().startsWith("CIT"))) {
+        if (minecraftPacket.getEntries().stream().allMatch(entry -> entry.getProfile() != null && entry.getProfile().getName().startsWith(CITIZENS_PREFIX))) {
             super.write(ctx, msg, promise);
             return;
         }
+
 
         plugin.getPacketEventManager().handleEntry(minecraftPacket, player);
         super.write(ctx, msg, promise);

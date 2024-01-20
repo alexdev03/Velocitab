@@ -36,11 +36,13 @@ import net.william278.velocitab.player.TabPlayer;
 import net.william278.velocitab.sorting.MorePlayersManager;
 import net.william278.velocitab.tab.Nametag;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.slf4j.event.Level;
 
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collector;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
 
 import static com.velocitypowered.api.network.ProtocolVersion.*;
 import static net.william278.velocitab.sorting.MorePlayersManager.MAX_PLAYERS;
@@ -75,21 +77,46 @@ public class ScoreboardManager {
     }
 
     private void recalculateMorePlayers(@NotNull Group group) {
-//        if(true) return;
-        final List<Player> tabPlayers = group.getPlayers(plugin).stream().filter(Player::isActive).toList();
+        recalculateMorePlayers(group, null);
+    }
+
+    private void recalculateMorePlayers(@NotNull Group group, @Nullable String newTag) {
+        final List<Player> tabPlayers = group.getTabPlayers(plugin).stream()
+                .filter(TabPlayer::isLoaded)
+                .map(TabPlayer::getPlayer)
+                .filter(Player::isActive)
+                .toList();
+
+        final boolean invalid = tabPlayers.size() <= MAX_PLAYERS;
+        final AtomicBoolean newTagHigher = new AtomicBoolean(true);
+        //se mi arriva un newTag != null, allora devo controllare che il newTag sia maggiore del tag attuale
+        //se arriva prima devo rifare il calcolo dei team(eliminare quello vecchio e creare quello nuovo) sennò non serve
+
         morePlayersManager.getFakeTeam(group).ifPresent(t -> {
-            final UpdateTeamsPacket packet = UpdateTeamsPacket.removeTeam(plugin, t.team());
-            dispatchGroupPacket(packet, group);
-            tabPlayers.forEach(tP -> tP.getTabList().removeEntry(t.entry().getProfile().getId()));
-            morePlayersManager.removeFakeTeam(group);
+            newTagHigher.set(newTag == null || newTag.compareTo(t.team()) < 0);
+            System.out.println("New tag higher: " + newTagHigher.get() + " as " + (newTagHigher.get() ? t.team() + " > " + newTag : t.team() + " < " + newTag));
+            if (newTagHigher.get()) {
+                final UpdateTeamsPacket packet = UpdateTeamsPacket.removeTeam(plugin, t.team());
+                dispatchGroupPacket(packet, group);
+                if(invalid) {
+                    tabPlayers.forEach(tP -> tP.getTabList().removeEntry(t.entry().getProfile().getId()));
+                }
+                morePlayersManager.removeFakeTeam(group);
+            }
         });
-        if (tabPlayers.size() <= MAX_PLAYERS) {
+
+        if (invalid || !newTagHigher.get()) {
             return;
         }
+
+        System.out.println("Recalculating more players for " + group.name() + " with " + tabPlayers.size() + " players");
 
         final String more = "&cAnd " + (tabPlayers.size() - MAX_PLAYERS) + " more...";
         final Component component = plugin.getFormatter().emptyFormat(more);
         final MorePlayersManager.FakePlayer fakePlayer = morePlayersManager.recalucateFakeTeam(group);
+        if (fakePlayer == null) {
+            return;
+        }
         final UpdateTeamsPacket packet = UpdateTeamsPacket.create(plugin, null, fakePlayer.team(), new Nametag("", ""), fakePlayer.entry().getProfile().getName());
         dispatchGroupPacket(packet, group);
         final VelocityTabListEntry entry = fakePlayer.entry(component);
@@ -102,22 +129,15 @@ public class ScoreboardManager {
     }
 
     @NotNull
-    public Map<UUID, String> getTeams(@NotNull Group group) {
-        final List<UUID> uuids = group.getTabPlayers(plugin).stream()
+    public SortedSet<String> getTeams(@NotNull Group group) {
+        final Set<UUID> uuids = group.getTabPlayers(plugin).stream()
                 .filter(TabPlayer::isLoaded)
                 .map(t -> t.getPlayer().getUniqueId())
-                .toList();
-
-        return createdTeams.entrySet().stream()
+                .collect(Collectors.toSet());
+        return new TreeSet<>(createdTeams.entrySet().stream()
                 .filter(entry -> uuids.contains(entry.getKey()))
-                .collect(Collector.of(
-                        ConcurrentHashMap::new,
-                        (map, entry) -> map.put(entry.getKey(), entry.getValue()),
-                        (map1, map2) -> {
-                            map1.putAll(map2);
-                            return map1;
-                        }
-                ));
+                .map(Map.Entry::getValue)
+                .toList());
     }
 
     @NotNull
@@ -205,11 +225,12 @@ public class ScoreboardManager {
 
                 createdTeams.put(player.getUniqueId(), role);
                 this.nametags.put(role, newTag);
+                recalculateMorePlayers(tabPlayer.getGroup(), role);
                 dispatchGroupPacket(
                         UpdateTeamsPacket.create(plugin, tabPlayer, role, newTag, name),
                         tabPlayer
                 );
-                recalculateMorePlayers(tabPlayer.getGroup());
+                plugin.getServer().getScheduler().buildTask(plugin, () -> plugin.getTabList().sendUpdateListed(tabPlayer.getPlayer())).delay(300, TimeUnit.MILLISECONDS).schedule();
             } else if (force || (this.nametags.containsKey(role) && !this.nametags.get(role).equals(newTag))) {
                 this.nametags.put(role, newTag);
                 dispatchGroupPacket(

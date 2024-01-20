@@ -27,12 +27,13 @@ import net.william278.velocitab.Velocitab;
 import net.william278.velocitab.config.Group;
 import net.william278.velocitab.packet.ScoreboardManager;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
 
 public class MorePlayersManager {
 
-    public static final int MAX_PLAYERS = 80;
+    public static final int MAX_PLAYERS = 79;
     private VelocityTabListEntry fakePlayer;
     private final Velocitab plugin;
     private Map<Group, String> fakeTeams;
@@ -62,19 +63,23 @@ public class MorePlayersManager {
                 .map(team -> new FakePlayer(team, fakePlayer));
     }
 
+   @Nullable
     public FakePlayer recalucateFakeTeam(@NotNull Group group) {
-        final Map<UUID, String> teamNames = scoreboardManager.getTeams(group);
-        final List<String> sortedList = new ArrayList<>(teamNames.values());
-        Collections.sort(sortedList);
+        final SortedSet<String> teamNames = scoreboardManager.getTeams(group);
+        final List<String> sortedList = new ArrayList<>(teamNames);
         final String fakeTeam = createStringAtPosition(MAX_PLAYERS, sortedList);
+        if (fakeTeam.isEmpty()) {
+            return null;
+        }
         fakeTeams.put(group, fakeTeam);
         return new FakePlayer(fakeTeam, fakePlayer);
     }
 
     @NotNull
-    private String createStringAtPosition(int position, List<String> sortedList) {
+    private String createStringAtPosition(int position, @NotNull List<String> sortedList) {
         if (position <= 0 || position > sortedList.size()) {
-            throw new IllegalArgumentException("Position must be between 1 and " + (sortedList.size() - 1));
+            return "";
+            //throw new IllegalArgumentException("Position must be between 1 and " + (sortedList.size() - 1));
         }
 
         final String pre = sortedList.get(position - 1);

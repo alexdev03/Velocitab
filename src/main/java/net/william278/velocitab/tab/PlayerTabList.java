@@ -143,28 +143,6 @@ public class PlayerTabList {
         });
     }
 
-    /**
-     * Fixes the tab list for the given player as the map is not concurrent.
-     *
-     * @param player The player for which to fix the tab list.
-     */
-    @SneakyThrows
-    @SuppressWarnings("unchecked")
-    protected void fixTabList(@NotNull Player player) {
-        if (!(player.getTabList() instanceof VelocityTabList velocityTabList)) {
-            return;
-        }
-
-//        if (true) return;
-
-        final Map<UUID, VelocityTabListEntry> entries = Maps.newConcurrentMap();
-
-        final Field entriesField = VelocityTabList.class.getDeclaredField("entries");
-        entriesField.setAccessible(true);
-        entries.putAll((Map<UUID, VelocityTabListEntry>) entriesField.get(velocityTabList));
-        entriesField.set(velocityTabList, entries);
-    }
-
 
     protected void joinPlayer(@NotNull Player joined, @NotNull Group group) {
         // Add the player to the tracking list if they are not already listed
@@ -468,6 +446,16 @@ public class PlayerTabList {
      */
     public void removeOfflinePlayer(@NotNull Player player) {
         players.remove(player.getUniqueId());
+    }
+
+    public void sendUpdateListed(@NotNull Player player) {
+        players.values().forEach(tabPlayer -> {
+            if (tabPlayer.getPlayer().getUniqueId().equals(player.getUniqueId())) {
+                return;
+            }
+            player.getTabList().getEntry(tabPlayer.getPlayer().getUniqueId())
+                    .ifPresent(entry -> entry.setListed(true));
+        });
     }
 
 }

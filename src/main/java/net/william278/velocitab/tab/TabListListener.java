@@ -19,7 +19,6 @@
 
 package net.william278.velocitab.tab;
 
-import com.google.common.collect.Maps;
 import com.velocitypowered.api.event.PostOrder;
 import com.velocitypowered.api.event.Subscribe;
 import com.velocitypowered.api.event.connection.DisconnectEvent;
@@ -29,17 +28,12 @@ import com.velocitypowered.api.event.proxy.ProxyReloadEvent;
 import com.velocitypowered.api.proxy.Player;
 import com.velocitypowered.api.proxy.ServerConnection;
 import com.velocitypowered.api.proxy.server.ServerInfo;
-import com.velocitypowered.proxy.tablist.VelocityTabList;
-import com.velocitypowered.proxy.tablist.VelocityTabListEntry;
-import lombok.SneakyThrows;
 import net.kyori.adventure.text.Component;
 import net.william278.velocitab.Velocitab;
 import net.william278.velocitab.config.Group;
 import net.william278.velocitab.player.TabPlayer;
 import org.jetbrains.annotations.NotNull;
 
-import java.lang.reflect.Field;
-import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -84,7 +78,6 @@ public class TabListListener {
             return;
         }
 
-        tabList.fixTabList(joined);
         tabList.joinPlayer(joined, group);
     }
 

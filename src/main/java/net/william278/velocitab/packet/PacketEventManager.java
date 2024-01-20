@@ -19,41 +19,46 @@
 
 package net.william278.velocitab.packet;
 
+import com.google.common.collect.Multimap;
+import com.google.common.collect.Multimaps;
 import com.google.common.collect.Sets;
 import com.velocitypowered.api.event.AwaitingEventExecutor;
 import com.velocitypowered.api.event.EventTask;
 import com.velocitypowered.api.event.connection.DisconnectEvent;
 import com.velocitypowered.api.event.connection.PostLoginEvent;
 import com.velocitypowered.api.proxy.Player;
+import com.velocitypowered.api.proxy.player.TabListEntry;
 import com.velocitypowered.proxy.connection.client.ConnectedPlayer;
 import com.velocitypowered.proxy.network.Connections;
 import com.velocitypowered.proxy.protocol.packet.UpsertPlayerInfoPacket;
 import com.velocitypowered.proxy.protocol.packet.chat.ComponentHolder;
+import com.velocitypowered.proxy.tablist.VelocityTabList;
+import com.velocitypowered.proxy.tablist.VelocityTabListEntry;
 import io.netty.channel.Channel;
 import lombok.Getter;
 import net.william278.velocitab.Velocitab;
 import net.william278.velocitab.player.TabPlayer;
 import org.jetbrains.annotations.NotNull;
 
-import java.util.List;
-import java.util.Optional;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 
 public class PacketEventManager {
 
     private static final String KEY = "velocitab";
-    private static final String CITIZENS_PREFIX = "CIT";
+    protected static final String CITIZENS_PREFIX = "CIT";
 
     private final Velocitab plugin;
     @Getter
     private final Set<UUID> velocitabEntries;
+    @Getter
+    private final Multimap<UUID, String> playerEntries;
 
     public PacketEventManager(@NotNull Velocitab plugin) {
         this.plugin = plugin;
         this.velocitabEntries = Sets.newConcurrentHashSet();
-//        this.loadPlayers();
-//        this.loadListeners();
+        this.loadPlayers();
+        this.loadListeners();
+        this.playerEntries = Multimaps.newListMultimap(new HashMap<>(), ArrayList::new);
     }
 
     private void loadPlayers() {
@@ -107,6 +112,36 @@ public class PacketEventManager {
         if (toUpdate.isEmpty()) {
             return;
         }
+
+
+
+        if (packet.getEntries().size() > 1 && false) {
+            Optional<UpsertPlayerInfoPacket.Entry> tabEntry = packet.getEntries().stream()
+                    .filter(e -> e.getProfileId().equals(player.getUniqueId()))
+                    .findFirst();
+
+            packet.getActions().remove(UpsertPlayerInfoPacket.Action.UPDATE_LISTED);
+
+            tabEntry.ifPresent(entry -> {
+                packet.getEntries().remove(entry);
+//            player.getTabList().addEntry(TabListEntry.builder()
+//                    .tabList(player.getTabList())
+//                    .displayName(entry.getDisplayName() != null ? entry.getDisplayName().getComponent() : null)
+//                    .profile(entry.getProfile())
+//                    .gameMode(entry.getGameMode())
+//                    .latency(entry.getLatency())
+//                    .listed(true)
+//                    .build());
+                ((ConnectedPlayer) (player)).getConnection().write(
+                        new UpsertPlayerInfoPacket(EnumSet.of(UpsertPlayerInfoPacket.Action.ADD_PLAYER, UpsertPlayerInfoPacket.Action.UPDATE_LISTED), List.of(entry)));
+            });
+        }
+
+//        final Optional<UpsertPlayerInfoPacket.Entry> tabEntry = packet.getEntries().stream()
+//                .filter(e -> e.getProfileId().equals(player.getUniqueId()))
+//                .findFirst();
+//        tabEntry.ifPresent(value -> packet.getEntries().stream().filter(entry1 -> value != entry1).forEach(e -> e.setListed(false)));
+
 
         toUpdate.forEach(tabPlayer -> packet.getEntries().stream()
                 .filter(entry -> entry.getProfileId().equals(tabPlayer.getPlayer().getUniqueId()))
