@@ -92,8 +92,10 @@ public class ScoreboardManager {
         //se mi arriva un newTag != null, allora devo controllare che il newTag sia maggiore del tag attuale
         //se arriva prima devo rifare il calcolo dei team(eliminare quello vecchio e creare quello nuovo) sennò non serve
 
-        morePlayersManager.getFakeTeam(group).ifPresent(t -> {
-            newTagHigher.set(newTag == null || newTag.compareTo(t.team()) < 0);
+        Optional<MorePlayersManager.FakePlayer> old = morePlayersManager.getFakeTeam(group);
+
+        old.ifPresent(t -> {
+            newTagHigher.set(newTag == null || isStringLexicographicallyBefore(newTag, t.team()));
             System.out.println("New tag higher: " + newTagHigher.get() + " as " + (newTagHigher.get() ? t.team() + " > " + newTag : t.team() + " < " + newTag));
             if (newTagHigher.get()) {
                 final UpdateTeamsPacket packet = UpdateTeamsPacket.removeTeam(plugin, t.team());
@@ -117,6 +119,10 @@ public class ScoreboardManager {
         if (fakePlayer == null) {
             return;
         }
+        if (old.isPresent() && old.get().team().equals(fakePlayer.team())) {
+            System.out.println("Same team, skipping");
+            return;
+        }
         final UpdateTeamsPacket packet = UpdateTeamsPacket.create(plugin, null, fakePlayer.team(), new Nametag("", ""), fakePlayer.entry().getProfile().getName());
         dispatchGroupPacket(packet, group);
         final VelocityTabListEntry entry = fakePlayer.entry(component);
@@ -126,6 +132,10 @@ public class ScoreboardManager {
             }
             tP.getTabList().addEntry(entry);
         });
+    }
+
+    private boolean isStringLexicographicallyBefore(@NotNull String str1, @NotNull String str2) {
+        return str1.compareTo(str2) < 0;
     }
 
     @NotNull
