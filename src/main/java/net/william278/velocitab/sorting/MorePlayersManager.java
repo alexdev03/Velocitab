@@ -38,18 +38,24 @@ public class MorePlayersManager {
     private final Velocitab plugin;
     private Map<Group, String> fakeTeams;
     private final ScoreboardManager scoreboardManager;
+    private final UUID uuid;
 
     public MorePlayersManager(@NotNull Velocitab plugin, @NotNull ScoreboardManager scoreboardManager) {
         this.plugin = plugin;
         this.fakeTeams = Maps.newConcurrentMap();
         this.scoreboardManager = scoreboardManager;
+        this.uuid = UUID.randomUUID();
         this.createFakePlayer();
+    }
+
+    public void close() {
+        plugin.getServer().getAllPlayers().forEach(player -> player.getTabList().removeEntry(uuid));
     }
 
     private void createFakePlayer() {
         fakePlayer = new VelocityTabListEntry(
                 null,
-                new GameProfile(UUID.randomUUID(), "velocitab", List.of()),
+                new GameProfile(uuid, "velocitab", List.of()),
                 Component.text("test"),
                 0,
                 0,
@@ -63,11 +69,11 @@ public class MorePlayersManager {
                 .map(team -> new FakePlayer(team, fakePlayer));
     }
 
-   @Nullable
+    @Nullable
     public FakePlayer recalucateFakeTeam(@NotNull Group group) {
         final SortedSet<String> teamNames = scoreboardManager.getTeams(group);
         final List<String> sortedList = new ArrayList<>(teamNames);
-        final String fakeTeam = createStringAtPosition(MAX_PLAYERS, sortedList);
+        final String fakeTeam = createStringAtPosition(MAX_PLAYERS - 1, sortedList);
         if (fakeTeam.isEmpty()) {
             return null;
         }

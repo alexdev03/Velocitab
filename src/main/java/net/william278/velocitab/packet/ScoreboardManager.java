@@ -76,11 +76,7 @@ public class ScoreboardManager {
         }
     }
 
-    private void recalculateMorePlayers(@NotNull Group group) {
-        recalculateMorePlayers(group, null);
-    }
-
-    private void recalculateMorePlayers(@NotNull Group group, @Nullable String newTag) {
+    private void recalculateMorePlayers(@NotNull Group group, @NotNull String tag, boolean remove) {
         final List<Player> tabPlayers = group.getTabPlayers(plugin).stream()
                 .filter(TabPlayer::isLoaded)
                 .map(TabPlayer::getPlayer)
@@ -89,18 +85,18 @@ public class ScoreboardManager {
 
         final boolean invalid = tabPlayers.size() <= MAX_PLAYERS;
         final AtomicBoolean newTagHigher = new AtomicBoolean(true);
-        //se mi arriva un newTag != null, allora devo controllare che il newTag sia maggiore del tag attuale
+        //se mi arriva un tag != null, allora devo controllare che il tag sia maggiore del tag attuale
         //se arriva prima devo rifare il calcolo dei team(eliminare quello vecchio e creare quello nuovo) sennò non serve
 
         Optional<MorePlayersManager.FakePlayer> old = morePlayersManager.getFakeTeam(group);
 
         old.ifPresent(t -> {
-            newTagHigher.set(newTag == null || isStringLexicographicallyBefore(newTag, t.team()));
-            System.out.println("New tag higher: " + newTagHigher.get() + " as " + (newTagHigher.get() ? t.team() + " > " + newTag : t.team() + " < " + newTag));
+            newTagHigher.set(isStringLexicographicallyBefore(tag, t.team()));
+            System.out.println("New tag higher: " + newTagHigher.get() + " as " + (newTagHigher.get() ? t.team() + " > " + tag : t.team() + " < " + tag));
             if (newTagHigher.get()) {
                 final UpdateTeamsPacket packet = UpdateTeamsPacket.removeTeam(plugin, t.team());
                 dispatchGroupPacket(packet, group);
-                if(invalid) {
+                if (invalid) {
                     tabPlayers.forEach(tP -> tP.getTabList().removeEntry(t.entry().getProfile().getId()));
                 }
                 morePlayersManager.removeFakeTeam(group);
@@ -108,18 +104,19 @@ public class ScoreboardManager {
         });
 
         if (invalid || !newTagHigher.get()) {
+            System.out.println("skipping");
             return;
         }
 
         System.out.println("Recalculating more players for " + group.name() + " with " + tabPlayers.size() + " players");
 
-        final String more = "&cAnd " + (tabPlayers.size() - MAX_PLAYERS) + " more...";
+        final String more = "&cAnd " + (tabPlayers.size() - MAX_PLAYERS + 1) + " more...";
         final Component component = plugin.getFormatter().emptyFormat(more);
         final MorePlayersManager.FakePlayer fakePlayer = morePlayersManager.recalucateFakeTeam(group);
         if (fakePlayer == null) {
             return;
         }
-        if (old.isPresent() && old.get().team().equals(fakePlayer.team())) {
+        if (!remove && old.isPresent() && old.get().team().equals(fakePlayer.team())) {
             System.out.println("Same team, skipping");
             return;
         }
@@ -160,6 +157,7 @@ public class ScoreboardManager {
 
     public void close() {
         plugin.getServer().getAllPlayers().forEach(this::resetCache);
+        morePlayersManager.close();
     }
 
     public void resetCache(@NotNull Player player) {
@@ -167,7 +165,7 @@ public class ScoreboardManager {
         if (team != null) {
             final TabPlayer tabPlayer = plugin.getTabList().getTabPlayer(player).orElseThrow();
             dispatchGroupPacket(UpdateTeamsPacket.removeTeam(plugin, team), tabPlayer);
-            recalculateMorePlayers(tabPlayer.getGroup());
+            recalculateMorePlayers(tabPlayer.getGroup(), team, true);
         }
     }
 
@@ -175,7 +173,7 @@ public class ScoreboardManager {
         final String team = createdTeams.remove(player.getUniqueId());
         if (team != null) {
             dispatchGroupPacket(UpdateTeamsPacket.removeTeam(plugin, team), group);
-            recalculateMorePlayers(group);
+            recalculateMorePlayers(group, team, true);
         }
     }
 
@@ -235,7 +233,7 @@ public class ScoreboardManager {
 
                 createdTeams.put(player.getUniqueId(), role);
                 this.nametags.put(role, newTag);
-                recalculateMorePlayers(tabPlayer.getGroup(), role);
+                recalculateMorePlayers(tabPlayer.getGroup(), role, false);
                 dispatchGroupPacket(
                         UpdateTeamsPacket.create(plugin, tabPlayer, role, newTag, name),
                         tabPlayer
