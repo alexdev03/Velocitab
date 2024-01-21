@@ -111,7 +111,7 @@ public class PlayerTabList {
                 return;
             }
 
-            joinPlayer(p, group);
+            joinPlayer(p, group, true);
         });
     }
 
@@ -144,7 +144,7 @@ public class PlayerTabList {
     }
 
 
-    protected void joinPlayer(@NotNull Player joined, @NotNull Group group) {
+    protected void joinPlayer(@NotNull Player joined, @NotNull Group group, boolean startup) {
         // Add the player to the tracking list if they are not already listed
         final TabPlayer tabPlayer = getTabPlayer(joined).orElseGet(() -> createTabPlayer(joined, group));
         tabPlayer.setGroup(group);
@@ -210,7 +210,7 @@ public class PlayerTabList {
 
                         plugin.getScoreboardManager().ifPresent(s -> {
                             s.resendAllTeams(tabPlayer);
-                            tabPlayer.getTeamName(plugin).thenAccept(t -> s.updateRole(tabPlayer, t, false));
+                            tabPlayer.getTeamName(plugin).thenAccept(t -> s.updateRole(tabPlayer, t, false, startup));
                         });
 
                         // Fire event without listening for result
@@ -287,7 +287,7 @@ public class PlayerTabList {
                 return;
             }
             plugin.getScoreboardManager().ifPresent(manager -> manager.updateRole(
-                    tabPlayer, teamName, force
+                    tabPlayer, teamName, force, false
             ));
         });
     }

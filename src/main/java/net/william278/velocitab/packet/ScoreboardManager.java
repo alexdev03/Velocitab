@@ -32,11 +32,11 @@ import com.velocitypowered.proxy.tablist.VelocityTabListEntry;
 import net.kyori.adventure.text.Component;
 import net.william278.velocitab.Velocitab;
 import net.william278.velocitab.config.Group;
+import net.william278.velocitab.config.Placeholder;
 import net.william278.velocitab.player.TabPlayer;
 import net.william278.velocitab.sorting.MorePlayersManager;
 import net.william278.velocitab.tab.Nametag;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 import org.slf4j.event.Level;
 
 import java.util.*;
@@ -76,59 +76,81 @@ public class ScoreboardManager {
         }
     }
 
-    private void recalculateMorePlayers(@NotNull Group group, @NotNull String tag, boolean remove) {
-        final List<Player> tabPlayers = group.getTabPlayers(plugin).stream()
+    private void recalculateMorePlayers(@NotNull Group group, @NotNull Player target, @NotNull String tag, boolean remove) {
+        final Group.MorePlayers morePlayers = group.morePlayers();
+        if (morePlayers == null || !morePlayers.enabled()) {
+            return;
+        }
+
+        final Set<TabPlayer> tabPlayers = group.getTabPlayers(plugin).stream()
                 .filter(TabPlayer::isLoaded)
-                .map(TabPlayer::getPlayer)
-                .filter(Player::isActive)
-                .toList();
+                .collect(Collectors.toSet());
 
-        final boolean invalid = tabPlayers.size() <= MAX_PLAYERS;
-        final AtomicBoolean newTagHigher = new AtomicBoolean(true);
-        //se mi arriva un tag != null, allora devo controllare che il tag sia maggiore del tag attuale
-        //se arriva prima devo rifare il calcolo dei team(eliminare quello vecchio e creare quello nuovo) sennò non serve
+        tabPlayers.forEach(tabPlayer -> {
+            final Player player = tabPlayer.getPlayer();
+            final Set<Player> tabEntries = tabPlayers.stream()
+                    .map(TabPlayer::getPlayer)
+                    .filter(p -> !p.equals(player))
+                    .filter(p -> player.getTabList().containsEntry(p.getUniqueId()))
+                    .filter(p -> plugin.getVanishManager().canSee(player.getUsername(), p.getUsername()))
+                    .collect(Collectors.toSet());
+            final boolean invalid = tabEntries.size() <= MAX_PLAYERS;
+            final AtomicBoolean newTagHigher = new AtomicBoolean(true);
 
-        Optional<MorePlayersManager.FakePlayer> old = morePlayersManager.getFakeTeam(group);
+            final Optional<MorePlayersManager.GroupTabList> old = morePlayersManager.getFakeTeam(group, tabEntries);
+            final AtomicBoolean forceRemove = new AtomicBoolean(false);
 
-        old.ifPresent(t -> {
-            newTagHigher.set(isStringLexicographicallyBefore(tag, t.team()));
-            System.out.println("New tag higher: " + newTagHigher.get() + " as " + (newTagHigher.get() ? t.team() + " > " + tag : t.team() + " < " + tag));
-            if (newTagHigher.get()) {
-                final UpdateTeamsPacket packet = UpdateTeamsPacket.removeTeam(plugin, t.team());
-                dispatchGroupPacket(packet, group);
-                if (invalid) {
-                    tabPlayers.forEach(tP -> tP.getTabList().removeEntry(t.entry().getProfile().getId()));
+            old.ifPresent(t -> {
+                if (remove) {
+                    t.uuids().remove(player.getUniqueId());
+                    if (t.uuids().isEmpty()) {
+                        morePlayersManager.removeFakeTeam(group, tabEntries);
+                        forceRemove.set(true);
+                    }
+                } else {
+                    t.uuids().add(player.getUniqueId());
                 }
-                morePlayersManager.removeFakeTeam(group);
+
+                newTagHigher.set(isStringLexicographicallyBefore(tag, t.team()));
+//                System.out.println("New tag higher: " + newTagHigher.get() + " as " + (newTagHigher.get() ? t.team() + " > " + tag : t.team() + " < " + tag));
+                if (player.getTabList().containsEntry(morePlayersManager.getUuid()) && newTagHigher.get()) {
+                    final UpdateTeamsPacket packet = UpdateTeamsPacket.removeTeam(plugin, t.team());
+                    dispatchPacket(packet, player);
+                    if (invalid) {
+                        player.getTabList().removeEntry(morePlayersManager.getUuid());
+                    }
+                    morePlayersManager.removeFakeTeam(group, tabEntries);
+                }
+            });
+
+            if (invalid || !newTagHigher.get()) {
+                return;
             }
+
+            final String text = morePlayers.text().replaceAll("%more_players%", String.valueOf(tabEntries.size() - MAX_PLAYERS));
+
+            Placeholder.replace(text, plugin, tabPlayer).thenAccept(more -> {
+                final Component component = plugin.getFormatter().emptyFormat(more);
+                final MorePlayersManager.FakePlayer fakePlayer = morePlayersManager.recalucateFakeTeam(group, player, tabEntries);
+                if (fakePlayer == null) {
+                    return;
+                }
+                if (target != player && !forceRemove.get() && !remove && old.isPresent() && old.get().team().equals(fakePlayer.team())) {
+                    return;
+                }
+                final UpdateTeamsPacket packet = UpdateTeamsPacket.create(plugin, null, fakePlayer.team(), new Nametag("", ""), fakePlayer.entry().getProfile().getName());
+                dispatchPacket(packet, player);
+                final VelocityTabListEntry entry = fakePlayer.entry(component);
+                player.getTabList().addEntry(entry);
+            }).exceptionally(e -> {
+                plugin.log(Level.ERROR, "Failed to update more players for " + player.getUsername(), e);
+                return null;
+            });
         });
 
-        if (invalid || !newTagHigher.get()) {
-            System.out.println("skipping");
-            return;
+        if (remove) {
+            morePlayersManager.clean(group, target);
         }
-
-        System.out.println("Recalculating more players for " + group.name() + " with " + tabPlayers.size() + " players");
-
-        final String more = "&cAnd " + (tabPlayers.size() - MAX_PLAYERS + 1) + " more...";
-        final Component component = plugin.getFormatter().emptyFormat(more);
-        final MorePlayersManager.FakePlayer fakePlayer = morePlayersManager.recalucateFakeTeam(group);
-        if (fakePlayer == null) {
-            return;
-        }
-        if (!remove && old.isPresent() && old.get().team().equals(fakePlayer.team())) {
-            System.out.println("Same team, skipping");
-            return;
-        }
-        final UpdateTeamsPacket packet = UpdateTeamsPacket.create(plugin, null, fakePlayer.team(), new Nametag("", ""), fakePlayer.entry().getProfile().getName());
-        dispatchGroupPacket(packet, group);
-        final VelocityTabListEntry entry = fakePlayer.entry(component);
-        tabPlayers.forEach(tP -> {
-            if (tP.getUsername().equalsIgnoreCase("AlexDev_")) {
-                System.out.println("Adding " + entry.getProfile().getName() + " to " + tP.getUsername());
-            }
-            tP.getTabList().addEntry(entry);
-        });
     }
 
     private boolean isStringLexicographicallyBefore(@NotNull String str1, @NotNull String str2) {
@@ -136,9 +158,10 @@ public class ScoreboardManager {
     }
 
     @NotNull
-    public SortedSet<String> getTeams(@NotNull Group group) {
+    public SortedSet<String> getTeams(@NotNull Group group, @NotNull Player player) {
         final Set<UUID> uuids = group.getTabPlayers(plugin).stream()
                 .filter(TabPlayer::isLoaded)
+                .filter(t -> player.getTabList().containsEntry(t.getPlayer().getUniqueId()))
                 .map(t -> t.getPlayer().getUniqueId())
                 .collect(Collectors.toSet());
         return new TreeSet<>(createdTeams.entrySet().stream()
@@ -156,24 +179,36 @@ public class ScoreboardManager {
     }
 
     public void close() {
-        plugin.getServer().getAllPlayers().forEach(this::resetCache);
         morePlayersManager.close();
+        plugin.getServer().getAllPlayers().forEach(this::resetCache);
     }
 
     public void resetCache(@NotNull Player player) {
+        resetCache(player, false);
+    }
+
+    public void resetCache(@NotNull Player player, boolean force) {
         final String team = createdTeams.remove(player.getUniqueId());
         if (team != null) {
             final TabPlayer tabPlayer = plugin.getTabList().getTabPlayer(player).orElseThrow();
             dispatchGroupPacket(UpdateTeamsPacket.removeTeam(plugin, team), tabPlayer);
-            recalculateMorePlayers(tabPlayer.getGroup(), team, true);
+            if (force) {
+                recalculateMorePlayers(tabPlayer.getGroup(), player, team, true);
+            }
         }
     }
 
-    public void resetCache(@NotNull Player player, @NotNull Group group) {
+    public void resetCache(@NotNull Player player, @NotNull Group group, boolean force) {
         final String team = createdTeams.remove(player.getUniqueId());
         if (team != null) {
             dispatchGroupPacket(UpdateTeamsPacket.removeTeam(plugin, team), group);
-            recalculateMorePlayers(group, team, true);
+            if (force) {
+                plugin.getServer().getScheduler().buildTask(plugin, () -> recalculateMorePlayers(group, player, team, true))
+                        .delay(2000, TimeUnit.MILLISECONDS)
+                        .schedule();
+            } else {
+                recalculateMorePlayers(group, player, team, true);
+            }
         }
     }
 
@@ -213,8 +248,9 @@ public class ScoreboardManager {
      * @param tabPlayer The TabPlayer object representing the player whose role will be updated.
      * @param role      The new role of the player. Must not be null.
      * @param force     Whether to force the update even if the player's nametag is the same.
+     * @param startup   Whether the update is being called on startup.
      */
-    public void updateRole(@NotNull TabPlayer tabPlayer, @NotNull String role, boolean force) {
+    public void updateRole(@NotNull TabPlayer tabPlayer, @NotNull String role, boolean force, boolean startup) {
         final Player player = tabPlayer.getPlayer();
         if (!player.isActive()) {
             plugin.getTabList().removeOfflinePlayer(player);
@@ -233,7 +269,13 @@ public class ScoreboardManager {
 
                 createdTeams.put(player.getUniqueId(), role);
                 this.nametags.put(role, newTag);
-                recalculateMorePlayers(tabPlayer.getGroup(), role, false);
+                if (!startup) {
+                    recalculateMorePlayers(tabPlayer.getGroup(), player, role, false);
+                } else {
+                    plugin.getServer().getScheduler().buildTask(plugin, () -> recalculateMorePlayers(tabPlayer.getGroup(), player, role, false))
+                            .delay(2000, TimeUnit.MILLISECONDS)
+                            .schedule();
+                }
                 dispatchGroupPacket(
                         UpdateTeamsPacket.create(plugin, tabPlayer, role, newTag, name),
                         tabPlayer
@@ -297,8 +339,9 @@ public class ScoreboardManager {
         });
     }
 
-    private void dispatchPacket(@NotNull UpdateTeamsPacket packet, @NotNull Player player) {
+    public void dispatchPacket(@NotNull UpdateTeamsPacket packet, @NotNull Player player) {
         if (!player.isActive()) {
+            System.out.println("Not active " + player.getUsername());
             plugin.getTabList().removeOfflinePlayer(player);
             return;
         }

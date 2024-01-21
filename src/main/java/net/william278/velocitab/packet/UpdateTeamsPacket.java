@@ -125,7 +125,7 @@ public class UpdateTeamsPacket implements MinecraftPacket {
     }
 
     @NotNull
-    protected static UpdateTeamsPacket removeTeam(@NotNull Velocitab plugin, @NotNull String teamName) {
+    public static UpdateTeamsPacket removeTeam(@NotNull Velocitab plugin, @NotNull String teamName) {
         return new UpdateTeamsPacket(plugin)
                 .teamName(teamName.length() > 16 ? teamName.substring(0, 16) : teamName)
                 .mode(UpdateMode.REMOVE_TEAM);

@@ -40,10 +40,7 @@ public record Group(
         Nametag nametag,
         List<String> servers,
         List<String> sortingPlaceholders,
-        @Comment("""
-                How often in milliseconds to periodically update the TAB list, including header and footer, for all users.
-                If set to 0, TAB will be updated on player join/leave instead. (1s = 1000ms)
-                The minimal update rate is 200ms, anything lower will automatically be set to 200ms.""")
+        MorePlayers morePlayers,
         int headerFooterUpdateRate,
         int placeholderUpdateRate
 ) {
@@ -100,5 +97,9 @@ public record Group(
             return false;
         }
         return name.equals(group.name);
+    }
+
+    public record MorePlayers(boolean enabled, String text) {
+
     }
 }

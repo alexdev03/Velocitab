@@ -113,36 +113,6 @@ public class PacketEventManager {
             return;
         }
 
-
-
-        if (packet.getEntries().size() > 1 && false) {
-            Optional<UpsertPlayerInfoPacket.Entry> tabEntry = packet.getEntries().stream()
-                    .filter(e -> e.getProfileId().equals(player.getUniqueId()))
-                    .findFirst();
-
-            packet.getActions().remove(UpsertPlayerInfoPacket.Action.UPDATE_LISTED);
-
-            tabEntry.ifPresent(entry -> {
-                packet.getEntries().remove(entry);
-//            player.getTabList().addEntry(TabListEntry.builder()
-//                    .tabList(player.getTabList())
-//                    .displayName(entry.getDisplayName() != null ? entry.getDisplayName().getComponent() : null)
-//                    .profile(entry.getProfile())
-//                    .gameMode(entry.getGameMode())
-//                    .latency(entry.getLatency())
-//                    .listed(true)
-//                    .build());
-                ((ConnectedPlayer) (player)).getConnection().write(
-                        new UpsertPlayerInfoPacket(EnumSet.of(UpsertPlayerInfoPacket.Action.ADD_PLAYER, UpsertPlayerInfoPacket.Action.UPDATE_LISTED), List.of(entry)));
-            });
-        }
-
-//        final Optional<UpsertPlayerInfoPacket.Entry> tabEntry = packet.getEntries().stream()
-//                .filter(e -> e.getProfileId().equals(player.getUniqueId()))
-//                .findFirst();
-//        tabEntry.ifPresent(value -> packet.getEntries().stream().filter(entry1 -> value != entry1).forEach(e -> e.setListed(false)));
-
-
         toUpdate.forEach(tabPlayer -> packet.getEntries().stream()
                 .filter(entry -> entry.getProfileId().equals(tabPlayer.getPlayer().getUniqueId()))
                 .findFirst()

@@ -67,7 +67,7 @@ public class TabListListener {
                 .map(ServerInfo::getName)
                 .orElse("");
         final Group group = tabList.getGroup(serverName);
-        plugin.getScoreboardManager().ifPresent(manager -> manager.resetCache(joined, group));
+        plugin.getScoreboardManager().ifPresent(manager -> manager.resetCache(joined, group, true));
         final boolean isDefault = !group.servers().contains(serverName);
 
         // If the server is not in a group, use fallback.
@@ -78,7 +78,7 @@ public class TabListListener {
             return;
         }
 
-        tabList.joinPlayer(joined, group);
+        tabList.joinPlayer(joined, group, false);
     }
 
 
@@ -109,7 +109,7 @@ public class TabListListener {
                 .delay(500, TimeUnit.MILLISECONDS)
                 .schedule();
         // Delete player team
-        plugin.getScoreboardManager().ifPresent(manager -> manager.resetCache(event.getPlayer()));
+        plugin.getScoreboardManager().ifPresent(manager -> manager.resetCache(event.getPlayer(), true));
         //remove player from tab list cache
         tabList.getPlayers().remove(uuid);
     }

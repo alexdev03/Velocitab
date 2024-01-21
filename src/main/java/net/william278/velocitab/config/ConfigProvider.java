@@ -22,6 +22,7 @@ package net.william278.velocitab.config;
 import de.exlll.configlib.NameFormatters;
 import de.exlll.configlib.YamlConfigurationProperties;
 import de.exlll.configlib.YamlConfigurations;
+import net.william278.velocitab.Velocitab;
 import org.jetbrains.annotations.NotNull;
 
 import java.nio.file.Path;
@@ -36,6 +37,8 @@ public interface ConfigProvider {
     @NotNull
     YamlConfigurationProperties.Builder<?> YAML_CONFIGURATION_PROPERTIES = YamlConfigurationProperties.newBuilder()
             .setNameFormatter(NameFormatters.LOWER_UNDERSCORE);
+
+    Velocitab getPlugin();
 
     /**
      * Get the plugin settings, read from the config file
@@ -65,7 +68,7 @@ public interface ConfigProvider {
                 Settings.class,
                 YAML_CONFIGURATION_PROPERTIES.header(Settings.CONFIG_HEADER).build()
         ));
-        getSettings().validateConfig();
+        getSettings().validateConfig(getPlugin());
     }
 
     /**
@@ -96,10 +99,39 @@ public interface ConfigProvider {
                 TabGroups.class,
                 YAML_CONFIGURATION_PROPERTIES.header(TabGroups.CONFIG_HEADER).build()
         ));
-        getTabGroups().validateConfig();
+        getTabGroups().validateConfig(getPlugin());
     }
 
+    /**
+     * Saves the plugin settings to the config file.
+     * It uses the YamlConfigurations.save method to write the settings object to the specified config file path.
+     *
+     * @throws IllegalStateException if the getConfigDirectory method returns null
+     * @since 1.0
+     */
+    default void saveSettings() {
+        YamlConfigurations.save(
+                getConfigDirectory().resolve("config.yml"),
+                Settings.class,
+                getSettings()
+        );
+    }
 
+    /**
+     * Saves the tab groups to the "tab_groups.yml" config file.
+     * Uses the YamlConfigurations.save method to write the tab groups object to the specified config file path.
+     * This method assumes that the getConfigDirectory method returns a valid directory path.
+     *
+     * @throws IllegalStateException if the getConfigDirectory method returns null
+     * @since 1.0
+     */
+    default void saveTabGroups() {
+        YamlConfigurations.save(
+                getConfigDirectory().resolve("tab_groups.yml"),
+                TabGroups.class,
+                getTabGroups()
+        );
+    }
 
     /**
      * Get the plugin config directory
