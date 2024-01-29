@@ -86,7 +86,7 @@ public class MorePlayersManager {
             return;
         }
 
-        if (tabPlayer.getPlayer().equals(target)) {
+        if (remove && tabPlayer.getPlayer().equals(target)) {
             return;
         }
 
@@ -101,10 +101,9 @@ public class MorePlayersManager {
                 }
 
                 final Optional<TabPlayer> tabPlayerOptional = plugin.getTabList().getTabPlayer(uuid);
-                target.getTabList().getEntry(uuid).ifPresentOrElse(entry ->
-                                entry.setDisplayName(tabPlayerOptional.map(TabPlayer::getLastDisplayName)
-                                        .orElse(Component.text("Error " + uuid))),
-                        () -> plugin.getLogger().error("Failed to remove more players entry for " + target.getUsername()));
+                target.getTabList().getEntry(uuid).ifPresent(entry ->
+                        entry.setDisplayName(tabPlayerOptional.map(TabPlayer::getLastDisplayName)
+                                .orElse(Component.text("Error " + uuid))));
             }
         } else if (!invalid && !remove) {
             final List<UUID> sorted = getSortedUUIDs(uuids);
@@ -126,10 +125,17 @@ public class MorePlayersManager {
                 return;
             }
 
+            if (tabPlayer.getPlayer().getUsername().equals("AlexDev_")) {
+                plugin.getLogger().info("Here " + sorted.size() + " " + uuids.size() + " " + index);
+            }
+
             updateMorePlayersEntry(tabPlayer, uuids.size() - MAX_PLAYERS, sorted.get(MAX_PLAYERS - 1));
         } else if (!invalid) {
             final UUID uuid = userCache.get(tabPlayer.getPlayer().getUniqueId());
             if (uuid == null) {
+                if (tabPlayer.getPlayer().getUsername().equals("AlexDev_")) {
+                    plugin.getLogger().info("AlexDev_ is null");
+                }
                 resetMorePlayersEntry(tabPlayer, uuids.get(MAX_PLAYERS - 1));
                 return;
             }
@@ -165,20 +171,20 @@ public class MorePlayersManager {
             return;
         }
         final String text = tabPlayer.getGroup().morePlayers().text().replaceAll("%more_players%", String.valueOf(count + 1));
-        Placeholder.replace(text, plugin, tabPlayer).thenAccept(more ->
-                tabPlayer.getPlayer().getTabList().getEntry(entry).ifPresentOrElse(tabListEntry ->
-                                tabListEntry.setDisplayName(plugin.getFormatter().format(text, tabPlayer, plugin)),
-                        () -> plugin.getLogger().error("Failed to update more players entry for " + tabPlayer.getPlayer().getUsername()))).exceptionally(e -> {
-            plugin.log(Level.ERROR, "Failed to update more players for " + tabPlayer.getPlayer().getUsername(), e);
-            return null;
-        });
+        Placeholder.replace(text, plugin, tabPlayer)
+                .thenAccept(more ->
+                        tabPlayer.getPlayer().getTabList().getEntry(entry).ifPresent(tabListEntry ->
+                                tabListEntry.setDisplayName(plugin.getFormatter().format(text, tabPlayer, plugin))))
+                .exceptionally(e -> {
+                    plugin.log(Level.ERROR, "Failed to update more players for " + tabPlayer.getPlayer().getUsername(), e);
+                    return null;
+                });
     }
 
     private void resetMorePlayersEntry(@NotNull TabPlayer tabPlayer, @NotNull UUID entry) {
         plugin.getTabList().getTabPlayer(entry).ifPresent(t ->
-                tabPlayer.getPlayer().getTabList().getEntry(entry).ifPresentOrElse(tabListEntry ->
-                                tabListEntry.setDisplayName(t.getLastDisplayName()),
-                        () -> plugin.getLogger().error("Failed to reset more players entry for " + tabPlayer.getPlayer().getUsername())));
+                tabPlayer.getPlayer().getTabList().getEntry(entry).ifPresent(tabListEntry ->
+                        tabListEntry.setDisplayName(t.getLastDisplayName())));
     }
 
 

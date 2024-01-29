@@ -52,7 +52,7 @@ public class ScoreboardManager {
     @Getter
     private final Map<UUID, String> createdTeams;
     private final Map<String, Nametag> nametags;
-    @Getter()
+    @Getter
     private final Multimap<UUID, UUID> playerTeams;
     @Getter
     private final MorePlayersManager morePlayersManager;

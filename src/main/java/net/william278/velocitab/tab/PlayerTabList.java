@@ -223,7 +223,10 @@ public class PlayerTabList {
     protected void removePlayer(@NotNull Player target) {
         final UUID uuid = target.getUniqueId();
         plugin.getServer().getAllPlayers().forEach(player -> player.getTabList().removeEntry(uuid));
-        plugin.getScoreboardManager().ifPresent(manager -> manager.getMorePlayersManager().clean(target.getUniqueId()));
+        plugin.getScoreboardManager().ifPresent(manager -> {
+            manager.getPlayerTeams().removeAll(uuid);
+            manager.getMorePlayersManager().clean(target.getUniqueId());
+        });
         // Update the tab list of all players
         plugin.getServer().getScheduler()
                 .buildTask(plugin, () -> getPlayers().values().forEach(player -> {
