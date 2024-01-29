@@ -22,10 +22,16 @@ package net.william278.velocitab.config;
 import de.exlll.configlib.NameFormatters;
 import de.exlll.configlib.YamlConfigurationProperties;
 import de.exlll.configlib.YamlConfigurations;
+import net.william278.desertwell.util.Version;
 import net.william278.velocitab.Velocitab;
 import org.jetbrains.annotations.NotNull;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.util.Objects;
 
 /**
  * Interface for getting and setting data from plugin configuration files
@@ -36,6 +42,7 @@ public interface ConfigProvider {
 
     @NotNull
     YamlConfigurationProperties.Builder<?> YAML_CONFIGURATION_PROPERTIES = YamlConfigurationProperties.newBuilder()
+            .charset(StandardCharsets.UTF_8)
             .setNameFormatter(NameFormatters.LOWER_UNDERSCORE);
 
     Velocitab getPlugin();
@@ -103,20 +110,29 @@ public interface ConfigProvider {
     }
 
     /**
-     * Saves the plugin settings to the config file.
-     * It uses the YamlConfigurations.save method to write the settings object to the specified config file path.
+     * Load the tab groups from the config file
      *
-     * @throws IllegalStateException if the getConfigDirectory method returns null
      * @since 1.0
      */
-    default void saveSettings() {
-        YamlConfigurations.save(
-                getConfigDirectory().resolve("config.yml"),
-                Settings.class,
-                getSettings()
-        );
+    @NotNull
+    default Metadata getMetadata() {
+        final URL resource = ConfigProvider.class.getResource("/metadata.yml");
+        try (InputStream input = Objects.requireNonNull(resource, "Metadata file missing").openStream()) {
+            return YamlConfigurations.read(input, Metadata.class, YAML_CONFIGURATION_PROPERTIES.build());
+        } catch (IOException e) {
+            throw new IllegalStateException("Unable to load plugin metadata", e);
+        }
     }
 
+    default void checkCompatibility() {
+        final Metadata metadata = getMetadata();
+        final Version proxyVersion = getVelocityVersion();
+        metadata.validateApiVersion(proxyVersion);
+        metadata.validateBuild(proxyVersion);
+    }
+
+    @NotNull
+    Version getVelocityVersion();
     /**
      * Saves the tab groups to the "tab_groups.yml" config file.
      * Uses the YamlConfigurations.save method to write the tab groups object to the specified config file path.

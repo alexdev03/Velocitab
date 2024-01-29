@@ -17,6 +17,9 @@ defaultTasks 'licenseFormat', 'build'
 ext {
     set 'version', version.toString()
     set 'description', description.toString()
+
+    set 'velocity_api_version', velocity_api_version.toString()
+    set 'velocity_minimum_build', velocity_minimum_build.toString()
 }
 
 repositories {
@@ -29,13 +32,14 @@ repositories {
 }
 
 dependencies {
-    compileOnly 'com.velocitypowered:velocity-api:3.3.0-SNAPSHOT'
-    compileOnly 'com.velocitypowered:velocity-proxy:3.3.0-SNAPSHOT'
-    compileOnly 'io.netty:netty-codec-http:4.1.105.Final'
+    compileOnly "com.velocitypowered:velocity-api:${velocity_api_version}-SNAPSHOT"
+    compileOnly "com.velocitypowered:velocity-proxy:${velocity_api_version}-SNAPSHOT"
+
+    compileOnly 'io.netty:netty-codec-http:4.1.106.Final'
     compileOnly 'org.projectlombok:lombok:1.18.30'
     compileOnly 'net.luckperms:api:5.4'
     compileOnly 'io.github.miniplaceholders:miniplaceholders-api:2.0.0'
-    compileOnly 'net.william278:PAPIProxyBridge:1.4.2'
+    compileOnly 'net.william278:PAPIProxyBridge:1.5'
     compileOnly 'it.unimi.dsi:fastutil:8.5.12'
     compileOnly 'net.kyori:adventure-nbt:4.15.0'
 
@@ -43,7 +47,7 @@ dependencies {
     implementation 'net.william278:DesertWell:2.0.4'
     implementation 'de.themoep:minedown-adventure:1.7.2-SNAPSHOT'
     implementation 'org.bstats:bstats-velocity:3.0.2'
-    implementation 'com.github.Exlll.ConfigLib:configlib-yaml:v4.3.0'
+    implementation 'com.github.Exlll.ConfigLib:configlib-yaml:v4.4.0'
 
     annotationProcessor 'org.projectlombok:lombok:1.18.30'
 }
@@ -146,7 +150,7 @@ publishing {
 
 tasks {
     runVelocity {
-        velocityVersion("3.3.0-SNAPSHOT")
+        velocityVersion("${velocity_api_version}-SNAPSHOT")
     }
 }
 

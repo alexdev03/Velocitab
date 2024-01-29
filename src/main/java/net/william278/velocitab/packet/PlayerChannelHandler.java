@@ -60,7 +60,6 @@ public class PlayerChannelHandler extends ChannelDuplexHandler {
             return;
         }
 
-
         plugin.getPacketEventManager().handleEntry(minecraftPacket, player);
         super.write(ctx, msg, promise);
     }

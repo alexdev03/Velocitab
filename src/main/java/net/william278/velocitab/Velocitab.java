@@ -42,14 +42,14 @@ import net.william278.velocitab.config.Settings;
 import net.william278.velocitab.config.TabGroups;
 import net.william278.velocitab.hook.Hook;
 import net.william278.velocitab.hook.LuckPermsHook;
-import net.william278.velocitab.packet.ScoreboardManager;
 import net.william278.velocitab.packet.PacketEventManager;
-import net.william278.velocitab.sorting.SortingManager;
-import net.william278.velocitab.tab.PlayerTabList;
+import net.william278.velocitab.packet.ScoreboardManager;
 import net.william278.velocitab.providers.HookProvider;
 import net.william278.velocitab.providers.LoggerProvider;
 import net.william278.velocitab.providers.MetricProvider;
 import net.william278.velocitab.providers.ScoreboardProvider;
+import net.william278.velocitab.sorting.SortingManager;
+import net.william278.velocitab.tab.PlayerTabList;
 import net.william278.velocitab.vanish.VanishManager;
 import org.bstats.velocity.Metrics;
 import org.jetbrains.annotations.NotNull;
@@ -61,13 +61,14 @@ import java.util.List;
 import java.util.Optional;
 
 @Plugin(id = "velocitab")
-@SuppressWarnings("unused")
 @Getter
 public class Velocitab implements ConfigProvider, ScoreboardProvider, LoggerProvider, HookProvider, MetricProvider {
+
     @Setter
     private Settings settings;
     @Setter
     private TabGroups tabGroups;
+
     private final ProxyServer server;
     private final Logger logger;
     private final Path configDirectory;
@@ -95,6 +96,7 @@ public class Velocitab implements ConfigProvider, ScoreboardProvider, LoggerProv
 
     @Subscribe
     public void onProxyInitialization(@NotNull ProxyInitializeEvent event) {
+        checkCompatibility();
         loadConfigs();
         loadHooks();
         prepareVanishManager();
@@ -159,6 +161,11 @@ public class Velocitab implements ConfigProvider, ScoreboardProvider, LoggerProv
     @NotNull
     public PluginDescription getDescription() {
         return pluginContainer.getDescription();
+    }
+
+    @NotNull
+    public Version getVelocityVersion() {
+        return Version.fromString(server.getVersion().getVersion(), "-");
     }
 
     @NotNull
