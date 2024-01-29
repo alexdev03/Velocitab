@@ -19,7 +19,6 @@
 
 package net.william278.velocitab.tab;
 
-import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.velocitypowered.api.proxy.Player;
 import com.velocitypowered.api.proxy.ServerConnection;
@@ -28,11 +27,8 @@ import com.velocitypowered.api.proxy.player.TabListEntry;
 import com.velocitypowered.api.proxy.server.RegisteredServer;
 import com.velocitypowered.api.proxy.server.ServerInfo;
 import com.velocitypowered.api.scheduler.ScheduledTask;
-import com.velocitypowered.proxy.tablist.VelocityTabList;
-import com.velocitypowered.proxy.tablist.VelocityTabListEntry;
 import lombok.AccessLevel;
 import lombok.Getter;
-import lombok.SneakyThrows;
 import net.kyori.adventure.text.Component;
 import net.william278.velocitab.Velocitab;
 import net.william278.velocitab.api.PlayerAddedToTabEvent;
@@ -43,7 +39,6 @@ import net.william278.velocitab.player.TabPlayer;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.event.Level;
 
-import java.lang.reflect.Field;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;

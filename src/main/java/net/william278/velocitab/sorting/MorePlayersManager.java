@@ -51,6 +51,8 @@ public class MorePlayersManager {
     private Multimap<Group, GroupTabList> fakeTeams;
     private final ScoreboardManager scoreboardManager;
     @Getter
+    private final Map<UUID, UUID> userCache;
+    @Getter
     private final UUID uuid;
 
     public MorePlayersManager(@NotNull Velocitab plugin, @NotNull ScoreboardManager scoreboardManager) {
@@ -58,14 +60,16 @@ public class MorePlayersManager {
         this.fakeTeams = Multimaps.newSetMultimap(Maps.newConcurrentMap(), Sets::newConcurrentHashSet);
         this.scoreboardManager = scoreboardManager;
         this.uuid = UUID.fromString("44b96d71-3ef7-41e5-83b7-f1813ba100ab");
+        this.userCache = Maps.newConcurrentMap();
         this.createFakePlayer();
     }
 
     public void close() {
+        //todo fix with groups
         plugin.getServer().getAllPlayers().forEach(player -> {
             player.getTabList().removeEntry(uuid);
             Optional<GroupTabList> groupTabList = fakeTeams.values().stream().filter(groupTabList1 -> groupTabList1.uuids().contains(player.getUniqueId())).findFirst();
-            groupTabList.ifPresent(groupTabList1 -> scoreboardManager.dispatchPacket(UpdateTeamsPacket.removeTeam(plugin, groupTabList1.team()), player));
+            groupTabList.ifPresent(groupTabList1 -> scoreboardManager.dispatchPacket(UpdateTeamsPacket.removeTeam(plugin, groupTabList1.team()), player, player.getUniqueId()));
         });
 
     }

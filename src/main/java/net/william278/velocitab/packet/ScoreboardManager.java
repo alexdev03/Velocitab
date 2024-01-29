@@ -20,11 +20,14 @@
 package net.william278.velocitab.packet;
 
 import com.google.common.collect.Maps;
+import com.google.common.collect.Multimap;
+import com.google.common.collect.Multimaps;
 import com.google.common.collect.Sets;
 import com.velocitypowered.api.network.ProtocolVersion;
 import com.velocitypowered.api.proxy.Player;
 import com.velocitypowered.api.proxy.ServerConnection;
 import com.velocitypowered.api.proxy.server.RegisteredServer;
+import com.velocitypowered.api.util.GameProfile;
 import com.velocitypowered.proxy.connection.client.ConnectedPlayer;
 import com.velocitypowered.proxy.protocol.ProtocolUtils;
 import com.velocitypowered.proxy.protocol.StateRegistry;
@@ -54,6 +57,7 @@ public class ScoreboardManager {
     private final Set<TeamsPacketAdapter> versions;
     private final Map<UUID, String> createdTeams;
     private final Map<String, Nametag> nametags;
+    private final Multimap<UUID, UUID> playerTeams;
     private final MorePlayersManager morePlayersManager;
 
     public ScoreboardManager(@NotNull Velocitab velocitab) {
@@ -62,6 +66,7 @@ public class ScoreboardManager {
         this.nametags = Maps.newConcurrentMap();
         this.versions = Sets.newHashSet();
         this.registerVersions();
+        this.playerTeams = Multimaps.newSetMultimap(Maps.newConcurrentMap(), Sets::newConcurrentHashSet);
         this.morePlayersManager = new MorePlayersManager(plugin, this);
     }
 
@@ -76,7 +81,76 @@ public class ScoreboardManager {
         }
     }
 
+    private void recalculateMorePlayers(@NotNull Group group, @NotNull Player target, boolean remove) {
+        group.getTabPlayers(plugin).forEach(tabPlayer -> recalculateMorePlayers(tabPlayer, target, remove));
+    }
+
+    private void recalculateMorePlayers(@NotNull TabPlayer tabPlayer, @NotNull Player target, boolean remove) {
+        final Collection<UUID> uuids = playerTeams.get(target.getUniqueId());
+        if (uuids.isEmpty()) {
+            return;
+        }
+
+        final boolean invalid = uuids.size() < MAX_PLAYERS;
+        if (invalid && remove) {
+            final UUID uuid = morePlayersManager.getUserCache().getOrDefault(target.getUniqueId(), null);
+            //should happen when uuids.size == MAX_PLAYERS - 1
+            if (uuid != null) {
+
+                if (uuid.equals(target.getUniqueId())) {
+                    return;
+                }
+
+                final Optional<TabPlayer> tabPlayerOptional = plugin.getTabList().getTabPlayer(uuid);
+                target.getTabList().getEntry(uuid).ifPresentOrElse(entry -> {
+                    entry.setDisplayName(tabPlayerOptional.map(TabPlayer::getLastDisplayname).orElse(Component.text("Error " + uuid.toString())));
+                }, () -> plugin.getLogger().error("Failed to remove more players entry for " + target.getUsername()));
+            }
+        } else {
+            final Map<UUID, String> teams = uuids.stream()
+                    .collect(Collectors.toMap(uuid -> uuid, uuid -> createdTeams.getOrDefault(uuid, "")))
+                    .entrySet()
+                    .stream()
+                    .sorted(Map.Entry.comparingByValue())
+                    .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (e1, e2) -> e1, LinkedHashMap::new));
+
+            if (teams.size() != uuids.size()) {
+                plugin.getLogger().error("Failed to sort more players for " + target.getUsername() + " as teams size != uuids size :" + teams.size() + " != " + uuids.size());
+                return;
+            }
+
+            final List<UUID> sorted = new ArrayList<>(teams.keySet());
+            int index = sorted.indexOf(target.getUniqueId());
+
+            if (index == -1) {
+                plugin.getLogger().error("Failed to sort more players for " + target.getUsername() + " as index == -1");
+                return;
+            }
+
+            morePlayersManager.getUserCache().put(target.getUniqueId(), target.getUniqueId());
+
+            updateMorePlayersEntry(tabPlayer, MAX_PLAYERS, target.getUniqueId());
+        }
+    }
+
+    private void updateMorePlayersEntry(@NotNull TabPlayer tabPlayer, int count, @NotNull UUID entry) {
+        final String text = tabPlayer.getGroup().morePlayers().text().replaceAll("%more_players%", String.valueOf(count));
+        Placeholder.replace(text, plugin, tabPlayer).thenAccept(more -> {
+            tabPlayer.getPlayer().getTabList().getEntry(entry).ifPresentOrElse(tabListEntry -> {
+                tabListEntry.setDisplayName(plugin.getFormatter().format(text, tabPlayer, plugin));
+            }, () -> plugin.getLogger().error("Failed to update more players entry for " + tabPlayer.getPlayer().getUsername()));
+        }).exceptionally(e -> {
+            plugin.log(Level.ERROR, "Failed to update more players for " + tabPlayer.getPlayer().getUsername(), e);
+            return null;
+        });
+    }
+
     private void recalculateMorePlayers(@NotNull Group group, @NotNull Player target, @NotNull String tag, boolean remove) {
+        if (true) {
+            recalculateMorePlayers(group, target, remove);
+            return;
+        }
+
         final Group.MorePlayers morePlayers = group.morePlayers();
         if (morePlayers == null || !morePlayers.enabled()) {
             return;
@@ -115,7 +189,7 @@ public class ScoreboardManager {
 //                System.out.println("New tag higher: " + newTagHigher.get() + " as " + (newTagHigher.get() ? t.team() + " > " + tag : t.team() + " < " + tag));
                 if (player.getTabList().containsEntry(morePlayersManager.getUuid()) && newTagHigher.get()) {
                     final UpdateTeamsPacket packet = UpdateTeamsPacket.removeTeam(plugin, t.team());
-                    dispatchPacket(packet, player);
+                    dispatchPacket(packet, player, player.getUniqueId());
                     if (invalid) {
                         player.getTabList().removeEntry(morePlayersManager.getUuid());
                     }
@@ -139,7 +213,7 @@ public class ScoreboardManager {
                     return;
                 }
                 final UpdateTeamsPacket packet = UpdateTeamsPacket.create(plugin, null, fakePlayer.team(), new Nametag("", ""), fakePlayer.entry().getProfile().getName());
-                dispatchPacket(packet, player);
+                dispatchPacket(packet, player, player.getUniqueId());
                 final VelocityTabListEntry entry = fakePlayer.entry(component);
                 player.getTabList().addEntry(entry);
             }).exceptionally(e -> {
@@ -191,7 +265,7 @@ public class ScoreboardManager {
         final String team = createdTeams.remove(player.getUniqueId());
         if (team != null) {
             final TabPlayer tabPlayer = plugin.getTabList().getTabPlayer(player).orElseThrow();
-            dispatchGroupPacket(UpdateTeamsPacket.removeTeam(plugin, team), tabPlayer);
+            dispatchGroupPacket(UpdateTeamsPacket.removeTeam(plugin, team), tabPlayer, player.getUniqueId());
             if (force) {
                 recalculateMorePlayers(tabPlayer.getGroup(), player, team, true);
             }
@@ -201,7 +275,7 @@ public class ScoreboardManager {
     public void resetCache(@NotNull Player player, @NotNull Group group, boolean force) {
         final String team = createdTeams.remove(player.getUniqueId());
         if (team != null) {
-            dispatchGroupPacket(UpdateTeamsPacket.removeTeam(plugin, team), group);
+            dispatchGroupPacket(UpdateTeamsPacket.removeTeam(plugin, team), group, player.getUniqueId());
             if (force) {
                 plugin.getServer().getScheduler().buildTask(plugin, () -> recalculateMorePlayers(group, player, team, true))
                         .delay(2000, TimeUnit.MILLISECONDS)
@@ -238,7 +312,7 @@ public class ScoreboardManager {
                     UpdateTeamsPacket.create(plugin, tabPlayer, teamName, nametag, player.getUsername());
             siblings.forEach(server -> server.getPlayersConnected().stream().filter(p -> p != player)
                     .filter(p -> vanish && !plugin.getVanishManager().canSee(p.getUsername(), player.getUsername()))
-                    .forEach(connected -> dispatchPacket(packet, connected)));
+                    .forEach(connected -> dispatchPacket(packet, connected, player.getUniqueId())));
         });
     }
 
@@ -263,7 +337,7 @@ public class ScoreboardManager {
                 if (createdTeams.containsKey(player.getUniqueId())) {
                     dispatchGroupPacket(
                             UpdateTeamsPacket.removeTeam(plugin, createdTeams.get(player.getUniqueId())),
-                            tabPlayer
+                            tabPlayer, player.getUniqueId()
                     );
                 }
 
@@ -278,14 +352,14 @@ public class ScoreboardManager {
                 }
                 dispatchGroupPacket(
                         UpdateTeamsPacket.create(plugin, tabPlayer, role, newTag, name),
-                        tabPlayer
+                        tabPlayer, player.getUniqueId()
                 );
                 plugin.getServer().getScheduler().buildTask(plugin, () -> plugin.getTabList().sendUpdateListed(tabPlayer.getPlayer())).delay(300, TimeUnit.MILLISECONDS).schedule();
             } else if (force || (this.nametags.containsKey(role) && !this.nametags.get(role).equals(newTag))) {
                 this.nametags.put(role, newTag);
                 dispatchGroupPacket(
                         UpdateTeamsPacket.changeNametag(plugin, tabPlayer, role, newTag),
-                        tabPlayer
+                        tabPlayer, player.getUniqueId()
                 );
             }
         }).exceptionally(e -> {
@@ -334,16 +408,23 @@ public class ScoreboardManager {
                 final UpdateTeamsPacket packet = UpdateTeamsPacket.create(
                         plugin, tabPlayer, role, tag, p.getUsername()
                 );
-                dispatchPacket(packet, player);
+                dispatchPacket(packet, player, p.getUniqueId());
             }
         });
     }
 
-    public void dispatchPacket(@NotNull UpdateTeamsPacket packet, @NotNull Player player) {
+    public void dispatchPacket(@NotNull UpdateTeamsPacket packet, @NotNull Player player, @NotNull UUID involved) {
         if (!player.isActive()) {
-            System.out.println("Not active " + player.getUsername());
             plugin.getTabList().removeOfflinePlayer(player);
             return;
+        }
+
+        final boolean isRemove = packet.mode() == UpdateTeamsPacket.UpdateMode.REMOVE_TEAM;
+
+        if (isRemove) {
+            playerTeams.remove(player.getUniqueId(), involved);
+        } else {
+            playerTeams.put(player.getUniqueId(), involved);
         }
 
         try {
@@ -354,23 +435,20 @@ public class ScoreboardManager {
         }
     }
 
-    private void dispatchGroupPacket(@NotNull UpdateTeamsPacket packet, @NotNull Group group) {
-        group.registeredServers(plugin).forEach(server -> server.getPlayersConnected().forEach(connected -> {
-            try {
-                final ConnectedPlayer connectedPlayer = (ConnectedPlayer) connected;
-                connectedPlayer.getConnection().write(packet);
-            } catch (Throwable e) {
-                plugin.log(Level.ERROR, "Failed to dispatch packet (unsupported client or server version)", e);
-            }
-        }));
+    private void dispatchGroupPacket(@NotNull UpdateTeamsPacket packet, @NotNull Group group, @NotNull UUID involved) {
+        group.registeredServers(plugin).forEach(server ->
+                server.getPlayersConnected().forEach(connected ->
+                        dispatchPacket(packet, connected, involved)));
     }
 
-    private void dispatchGroupPacket(@NotNull UpdateTeamsPacket packet, @NotNull TabPlayer tabPlayer) {
+    private void dispatchGroupPacket(@NotNull UpdateTeamsPacket packet, @NotNull TabPlayer tabPlayer, @NotNull UUID involved) {
         final Player player = tabPlayer.getPlayer();
         final Optional<ServerConnection> optionalServerConnection = player.getCurrentServer();
         if (optionalServerConnection.isEmpty()) {
             return;
         }
+
+        boolean isRemove = packet.mode() == UpdateTeamsPacket.UpdateMode.REMOVE_TEAM;
 
         final List<RegisteredServer> siblings = tabPlayer.getGroup().registeredServers(plugin);
         siblings.forEach(server -> server.getPlayersConnected().forEach(connected -> {
@@ -378,6 +456,12 @@ public class ScoreboardManager {
                 final boolean canSee = plugin.getVanishManager().canSee(connected.getUsername(), player.getUsername());
                 if (!canSee) {
                     return;
+                }
+
+                if (isRemove) {
+                    playerTeams.remove(connected.getUniqueId(), involved);
+                } else {
+                    playerTeams.put(connected.getUniqueId(), involved);
                 }
 
                 final ConnectedPlayer connectedPlayer = (ConnectedPlayer) connected;
@@ -438,15 +522,15 @@ public class ScoreboardManager {
         }
 
         final UpdateTeamsPacket removeTeam = UpdateTeamsPacket.removeTeam(plugin, team);
-        dispatchPacket(removeTeam, player);
+        dispatchPacket(removeTeam, player, target.getPlayer().getUniqueId());
 
         if (canSee) {
             final Nametag tag = nametags.get(team);
             if (tag != null) {
                 final UpdateTeamsPacket addTeam = UpdateTeamsPacket.create(
-                        plugin, tabPlayer, team, tag, target.getPlayer().getUsername()
+                        plugin, target, team, tag, target.getPlayer().getUsername()
                 );
-                dispatchPacket(addTeam, player);
+                dispatchPacket(addTeam, player, target.getPlayer().getUniqueId());
             }
         }
     }
