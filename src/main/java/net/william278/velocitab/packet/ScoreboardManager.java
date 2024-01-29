@@ -27,15 +27,12 @@ import com.velocitypowered.api.network.ProtocolVersion;
 import com.velocitypowered.api.proxy.Player;
 import com.velocitypowered.api.proxy.ServerConnection;
 import com.velocitypowered.api.proxy.server.RegisteredServer;
-import com.velocitypowered.api.util.GameProfile;
 import com.velocitypowered.proxy.connection.client.ConnectedPlayer;
 import com.velocitypowered.proxy.protocol.ProtocolUtils;
 import com.velocitypowered.proxy.protocol.StateRegistry;
-import com.velocitypowered.proxy.tablist.VelocityTabListEntry;
-import net.kyori.adventure.text.Component;
+import lombok.Getter;
 import net.william278.velocitab.Velocitab;
 import net.william278.velocitab.config.Group;
-import net.william278.velocitab.config.Placeholder;
 import net.william278.velocitab.player.TabPlayer;
 import net.william278.velocitab.sorting.MorePlayersManager;
 import net.william278.velocitab.tab.Nametag;
@@ -44,20 +41,20 @@ import org.slf4j.event.Level;
 
 import java.util.*;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.stream.Collectors;
 
 import static com.velocitypowered.api.network.ProtocolVersion.*;
-import static net.william278.velocitab.sorting.MorePlayersManager.MAX_PLAYERS;
 
 public class ScoreboardManager {
 
     private PacketRegistration<UpdateTeamsPacket> packetRegistration;
     private final Velocitab plugin;
     private final Set<TeamsPacketAdapter> versions;
+    @Getter
     private final Map<UUID, String> createdTeams;
     private final Map<String, Nametag> nametags;
+    @Getter()
     private final Multimap<UUID, UUID> playerTeams;
+    @Getter
     private final MorePlayersManager morePlayersManager;
 
     public ScoreboardManager(@NotNull Velocitab velocitab) {
@@ -82,169 +79,6 @@ public class ScoreboardManager {
         }
     }
 
-    private void recalculateMorePlayers(@NotNull Group group, @NotNull Player target, boolean remove) {
-        group.getTabPlayers(plugin).forEach(tabPlayer -> recalculateMorePlayers(tabPlayer, target, remove));
-    }
-
-    private void recalculateMorePlayers(@NotNull TabPlayer tabPlayer, @NotNull Player target, boolean remove) {
-        final Collection<UUID> uuids = playerTeams.get(target.getUniqueId());
-        if (uuids.isEmpty()) {
-            return;
-        }
-
-        final boolean invalid = uuids.size() < MAX_PLAYERS;
-        if (invalid && remove) {
-            final UUID uuid = morePlayersManager.getUserCache().getOrDefault(target.getUniqueId(), null);
-            //should happen when uuids.size == MAX_PLAYERS - 1
-            if (uuid != null) {
-
-                if (uuid.equals(target.getUniqueId())) {
-                    return;
-                }
-
-                final Optional<TabPlayer> tabPlayerOptional = plugin.getTabList().getTabPlayer(uuid);
-                target.getTabList().getEntry(uuid).ifPresentOrElse(entry -> {
-                    entry.setDisplayName(tabPlayerOptional.map(TabPlayer::getLastDisplayname).orElse(Component.text("Error " + uuid.toString())));
-                }, () -> plugin.getLogger().error("Failed to remove more players entry for " + target.getUsername()));
-            }
-        } else {
-            final Map<UUID, String> teams = uuids.stream()
-                    .collect(Collectors.toMap(uuid -> uuid, uuid -> createdTeams.getOrDefault(uuid, "")))
-                    .entrySet()
-                    .stream()
-                    .sorted(Map.Entry.comparingByValue())
-                    .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (e1, e2) -> e1, LinkedHashMap::new));
-
-            if (teams.size() != uuids.size()) {
-                plugin.getLogger().error("Failed to sort more players for " + target.getUsername() + " as teams size != uuids size :" + teams.size() + " != " + uuids.size());
-                return;
-            }
-
-            final List<UUID> sorted = new ArrayList<>(teams.keySet());
-            int index = sorted.indexOf(target.getUniqueId());
-
-            if (index == -1) {
-                plugin.getLogger().error("Failed to sort more players for " + target.getUsername() + " as index == -1");
-                return;
-            }
-
-            morePlayersManager.getUserCache().put(target.getUniqueId(), target.getUniqueId());
-
-            updateMorePlayersEntry(tabPlayer, MAX_PLAYERS, target.getUniqueId());
-        }
-    }
-
-    private void updateMorePlayersEntry(@NotNull TabPlayer tabPlayer, int count, @NotNull UUID entry) {
-        final String text = tabPlayer.getGroup().morePlayers().text().replaceAll("%more_players%", String.valueOf(count));
-        Placeholder.replace(text, plugin, tabPlayer).thenAccept(more -> {
-            tabPlayer.getPlayer().getTabList().getEntry(entry).ifPresentOrElse(tabListEntry -> {
-                tabListEntry.setDisplayName(plugin.getFormatter().format(text, tabPlayer, plugin));
-            }, () -> plugin.getLogger().error("Failed to update more players entry for " + tabPlayer.getPlayer().getUsername()));
-        }).exceptionally(e -> {
-            plugin.log(Level.ERROR, "Failed to update more players for " + tabPlayer.getPlayer().getUsername(), e);
-            return null;
-        });
-    }
-
-    private void recalculateMorePlayers(@NotNull Group group, @NotNull Player target, @NotNull String tag, boolean remove) {
-        if (true) {
-            recalculateMorePlayers(group, target, remove);
-            return;
-        }
-
-        final Group.MorePlayers morePlayers = group.morePlayers();
-        if (morePlayers == null || !morePlayers.enabled()) {
-            return;
-        }
-
-        final Set<TabPlayer> tabPlayers = group.getTabPlayers(plugin).stream()
-                .filter(TabPlayer::isLoaded)
-                .collect(Collectors.toSet());
-
-        tabPlayers.forEach(tabPlayer -> {
-            final Player player = tabPlayer.getPlayer();
-            final Set<Player> tabEntries = tabPlayers.stream()
-                    .map(TabPlayer::getPlayer)
-                    .filter(p -> !p.equals(player))
-                    .filter(p -> player.getTabList().containsEntry(p.getUniqueId()))
-                    .filter(p -> plugin.getVanishManager().canSee(player.getUsername(), p.getUsername()))
-                    .collect(Collectors.toSet());
-            final boolean invalid = tabEntries.size() <= MAX_PLAYERS;
-            final AtomicBoolean newTagHigher = new AtomicBoolean(true);
-
-            final Optional<MorePlayersManager.GroupTabList> old = morePlayersManager.getFakeTeam(group, tabEntries);
-            final AtomicBoolean forceRemove = new AtomicBoolean(false);
-
-            old.ifPresent(t -> {
-                if (remove) {
-                    t.uuids().remove(player.getUniqueId());
-                    if (t.uuids().isEmpty()) {
-                        morePlayersManager.removeFakeTeam(group, tabEntries);
-                        forceRemove.set(true);
-                    }
-                } else {
-                    t.uuids().add(player.getUniqueId());
-                }
-
-                newTagHigher.set(isStringLexicographicallyBefore(tag, t.team()));
-//                System.out.println("New tag higher: " + newTagHigher.get() + " as " + (newTagHigher.get() ? t.team() + " > " + tag : t.team() + " < " + tag));
-                if (player.getTabList().containsEntry(morePlayersManager.getUuid()) && newTagHigher.get()) {
-                    final UpdateTeamsPacket packet = UpdateTeamsPacket.removeTeam(plugin, t.team());
-                    dispatchPacket(packet, player, player.getUniqueId());
-                    if (invalid) {
-                        player.getTabList().removeEntry(morePlayersManager.getUuid());
-                    }
-                    morePlayersManager.removeFakeTeam(group, tabEntries);
-                }
-            });
-
-            if (invalid || !newTagHigher.get()) {
-                return;
-            }
-
-            final String text = morePlayers.text().replaceAll("%more_players%", String.valueOf(tabEntries.size() - MAX_PLAYERS));
-
-            Placeholder.replace(text, plugin, tabPlayer).thenAccept(more -> {
-                final Component component = plugin.getFormatter().emptyFormat(more);
-                final MorePlayersManager.FakePlayer fakePlayer = morePlayersManager.recalucateFakeTeam(group, player, tabEntries);
-                if (fakePlayer == null) {
-                    return;
-                }
-                if (target != player && !forceRemove.get() && !remove && old.isPresent() && old.get().team().equals(fakePlayer.team())) {
-                    return;
-                }
-                final UpdateTeamsPacket packet = UpdateTeamsPacket.create(plugin, null, fakePlayer.team(), new Nametag("", ""), fakePlayer.entry().getProfile().getName());
-                dispatchPacket(packet, player, player.getUniqueId());
-                final VelocityTabListEntry entry = fakePlayer.entry(component);
-                player.getTabList().addEntry(entry);
-            }).exceptionally(e -> {
-                plugin.log(Level.ERROR, "Failed to update more players for " + player.getUsername(), e);
-                return null;
-            });
-        });
-
-        if (remove) {
-            morePlayersManager.clean(group, target);
-        }
-    }
-
-    private boolean isStringLexicographicallyBefore(@NotNull String str1, @NotNull String str2) {
-        return str1.compareTo(str2) < 0;
-    }
-
-    @NotNull
-    public SortedSet<String> getTeams(@NotNull Group group, @NotNull Player player) {
-        final Set<UUID> uuids = group.getTabPlayers(plugin).stream()
-                .filter(TabPlayer::isLoaded)
-                .filter(t -> player.getTabList().containsEntry(t.getPlayer().getUniqueId()))
-                .map(t -> t.getPlayer().getUniqueId())
-                .collect(Collectors.toSet());
-        return new TreeSet<>(createdTeams.entrySet().stream()
-                .filter(entry -> uuids.contains(entry.getKey()))
-                .map(Map.Entry::getValue)
-                .toList());
-    }
-
     @NotNull
     public TeamsPacketAdapter getPacketAdapter(@NotNull ProtocolVersion version) {
         return versions.stream()
@@ -259,17 +93,11 @@ public class ScoreboardManager {
     }
 
     public void resetCache(@NotNull Player player) {
-        resetCache(player, false);
-    }
-
-    public void resetCache(@NotNull Player player, boolean force) {
         final String team = createdTeams.remove(player.getUniqueId());
         if (team != null) {
             final TabPlayer tabPlayer = plugin.getTabList().getTabPlayer(player).orElseThrow();
             dispatchGroupPacket(UpdateTeamsPacket.removeTeam(plugin, team), tabPlayer, player.getUniqueId());
-            if (force) {
-                recalculateMorePlayers(tabPlayer.getGroup(), player, team, true);
-            }
+            morePlayersManager.recalculateMorePlayers(tabPlayer.getGroup(), player, true);
         }
     }
 
@@ -278,11 +106,11 @@ public class ScoreboardManager {
         if (team != null) {
             dispatchGroupPacket(UpdateTeamsPacket.removeTeam(plugin, team), group, player.getUniqueId());
             if (force) {
-                plugin.getServer().getScheduler().buildTask(plugin, () -> recalculateMorePlayers(group, player, team, true))
+                plugin.getServer().getScheduler().buildTask(plugin, () -> morePlayersManager.recalculateMorePlayers(group, player, true))
                         .delay(2000, TimeUnit.MILLISECONDS)
                         .schedule();
             } else {
-                recalculateMorePlayers(group, player, team, true);
+                morePlayersManager.recalculateMorePlayers(group, player, true);
             }
         }
     }
@@ -344,17 +172,18 @@ public class ScoreboardManager {
 
                 createdTeams.put(player.getUniqueId(), role);
                 this.nametags.put(role, newTag);
-                if (!startup) {
-                    recalculateMorePlayers(tabPlayer.getGroup(), player, role, false);
-                } else {
-                    plugin.getServer().getScheduler().buildTask(plugin, () -> recalculateMorePlayers(tabPlayer.getGroup(), player, role, false))
-                            .delay(2000, TimeUnit.MILLISECONDS)
-                            .schedule();
-                }
+
                 dispatchGroupPacket(
                         UpdateTeamsPacket.create(plugin, tabPlayer, role, newTag, name),
                         tabPlayer, player.getUniqueId()
                 );
+                if (!startup) {
+                    morePlayersManager.recalculateMorePlayers(tabPlayer.getGroup(), player, false);
+                } else {
+                    plugin.getServer().getScheduler().buildTask(plugin, () -> morePlayersManager.recalculateMorePlayers(tabPlayer.getGroup(), player, false))
+                            .delay(100, TimeUnit.MILLISECONDS)
+                            .schedule();
+                }
                 plugin.getServer().getScheduler().buildTask(plugin, () -> plugin.getTabList().sendUpdateListed(tabPlayer.getPlayer())).delay(300, TimeUnit.MILLISECONDS).schedule();
             } else if (force || (this.nametags.containsKey(role) && !this.nametags.get(role).equals(newTag))) {
                 this.nametags.put(role, newTag);
