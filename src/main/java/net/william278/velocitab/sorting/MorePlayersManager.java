@@ -19,11 +19,9 @@
 
 package net.william278.velocitab.sorting;
 
-import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.velocitypowered.api.proxy.Player;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import net.william278.velocitab.Velocitab;
 import net.william278.velocitab.config.Group;
 import net.william278.velocitab.config.Placeholder;
@@ -33,7 +31,6 @@ import org.jetbrains.annotations.NotNull;
 import org.slf4j.event.Level;
 
 import java.util.*;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 public class MorePlayersManager {
@@ -54,11 +51,10 @@ public class MorePlayersManager {
             final Optional<TabPlayer> tabPlayerOptional = plugin.getTabList().getTabPlayer(uuid);
             tabPlayerOptional.ifPresent(tabPlayer -> {
                 final Optional<TabPlayer> tabPlayerOptional2 = plugin.getTabList().getTabPlayer(uuid2);
-                tabPlayerOptional2.ifPresent(tabPlayer2 -> {
-                    tabPlayer.getPlayer().getTabList().getEntry(uuid2).ifPresentOrElse(tabListEntry -> {
-                        tabListEntry.setDisplayName(tabPlayer2.getLastDisplayName());
-                    }, () -> plugin.getLogger().error("Failed to remove more players entry for " + tabPlayer.getPlayer().getUsername()));
-                });
+                tabPlayerOptional2.ifPresent(tabPlayer2 ->
+                        tabPlayer.getPlayer().getTabList().getEntry(uuid2).ifPresentOrElse(tabListEntry ->
+                                        tabListEntry.setDisplayName(tabPlayer2.getLastDisplayName()),
+                                () -> plugin.getLogger().error("Failed to remove more players entry for " + tabPlayer.getPlayer().getUsername())));
             });
         });
     }
@@ -67,6 +63,16 @@ public class MorePlayersManager {
         userCache.remove(uuid);
     }
 
+    /**
+     * Recalculates the "more players" feature entry in the scoreboard for either a group
+     * or a target player, and optionally removes the entry.
+     *
+     * @param group  The group for which to recalculate the "more players" entry.
+     *               Must not be null.
+     * @param target The target player whose "more players" entry should be updated.
+     *               Must not be null.
+     * @param remove Whether this method is being called to remove the entry or not.
+     */
     public void recalculateMorePlayers(@NotNull Group group, @NotNull Player target, boolean remove) {
         if (!group.morePlayers().enabled()) {
             return;
@@ -80,7 +86,7 @@ public class MorePlayersManager {
             return;
         }
 
-        if(tabPlayer.getPlayer().equals(target)) {
+        if (tabPlayer.getPlayer().equals(target)) {
             return;
         }
 
@@ -90,40 +96,21 @@ public class MorePlayersManager {
             final UUID uuid = userCache.getOrDefault(target.getUniqueId(), null);
             //should happen when uuids.size == MAX_PLAYERS - 1
             if (uuid != null) {
-
                 if (uuid.equals(target.getUniqueId())) {
                     return;
                 }
 
                 final Optional<TabPlayer> tabPlayerOptional = plugin.getTabList().getTabPlayer(uuid);
-                target.getTabList().getEntry(uuid).ifPresentOrElse(entry -> {
-                    entry.setDisplayName(tabPlayerOptional.map(TabPlayer::getLastDisplayName).orElse(Component.text("Error " + uuid.toString())));
-                }, () -> plugin.getLogger().error("Failed to remove more players entry for " + target.getUsername()));
+                target.getTabList().getEntry(uuid).ifPresentOrElse(entry ->
+                                entry.setDisplayName(tabPlayerOptional.map(TabPlayer::getLastDisplayName)
+                                        .orElse(Component.text("Error " + uuid))),
+                        () -> plugin.getLogger().error("Failed to remove more players entry for " + target.getUsername()));
             }
         } else if (!invalid && !remove) {
-//            final Map<UUID, String> teams = uuids.stream()
-//                    .collect(Collectors.toMap(uuid -> uuid, uuid -> scoreboardManager.getCreatedTeams().getOrDefault(uuid, "")))
-//                    .entrySet()
-//                    .stream()
-//                    .sorted(Map.Entry.comparingByValue())
-//                    .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (e1, e2) -> e1, LinkedHashMap::new));
-//
-//            if (teams.size() != uuids.size()) {
-//                plugin.getLogger().error("Failed to sort more players for " + target.getUsername() + " as teams size != uuids size :" + teams.size() + " != " + uuids.size());
-//                return;
-//            }
-//
-//            final List<UUID> sorted = new ArrayList<>(teams.keySet());
-//            int index = sorted.indexOf(target.getUniqueId());
-//
-//            if (index == -1) {
-//                plugin.getLogger().error("Failed to sort more players for " + target.getUsername() + " as index == -1");
-//                return;
-//            }
-            final List<UUID> sorted = getSortedUUIDs(tabPlayer, target, uuids);
+            final List<UUID> sorted = getSortedUUIDs(uuids);
             int index = sorted.indexOf(target.getUniqueId());
 
-            if(sorted.isEmpty() || index == -1) {
+            if (sorted.isEmpty() || index == -1) {
                 return;
             }
 
@@ -148,35 +135,16 @@ public class MorePlayersManager {
             }
             if (uuid.equals(target.getUniqueId())) {
                 updateMorePlayersEntry(tabPlayer, uuids.size() - MAX_PLAYERS - 1, uuid);
-                if (tabPlayer.getPlayer().getUsername().equals("AlexDev_")) {
-                    plugin.getLogger().info("Setting AlexDev_ to here 1 " + uuid);
-                }
             } else {
-//                if (sorted.size() <= MAX_PLAYERS + 1 ) {
-//                    System.out.println("sorted size <= MAX_PLAYERS + 1 " + sorted.size() + " " + MAX_PLAYERS + " " + uuids.size() + " " + sorted.indexOf(uuid));
-//                    return;
-//                }
-
-                final List<UUID> current = Lists.newArrayList(scoreboardManager.getPlayerTeams().get(tabPlayer.getPlayer().getUniqueId()));
-//                current.remove(target.getUniqueId());
-                final List<UUID> sorted = getSortedUUIDs(tabPlayer, target, current);
+                List<UUID> sorted = getSortedUUIDs(uuids);
                 final UUID old = sorted.get(MAX_PLAYERS - 1);
                 resetMorePlayersEntry(tabPlayer, uuid);
                 updateMorePlayersEntry(tabPlayer, uuids.size() - MAX_PLAYERS, old);
-                if (tabPlayer.getPlayer().getUsername().equals("AlexDev_")) {
-                    plugin.getLogger().info("Setting AlexDev_ to here 2 " + uuid + " " + (uuids.size() - MAX_PLAYERS) + " " + sorted.indexOf(uuid) + " " + old + " " + sorted.indexOf(old));
-                    plugin.getLogger().info(String.valueOf(current.equals(uuids)));
-                }
-
-                plugin.getServer().getScheduler().buildTask(plugin, () -> {
-
-                }).delay(50, TimeUnit.MILLISECONDS).schedule();
-
             }
         }
     }
 
-    private List<UUID> getSortedUUIDs(@NotNull TabPlayer tabPlayer, @NotNull Player target, @NotNull Collection<UUID> uuids) {
+    private List<UUID> getSortedUUIDs(@NotNull Collection<UUID> uuids) {
         final Map<UUID, String> teams = uuids.stream()
                 .collect(Collectors.toMap(uuid -> uuid, uuid -> scoreboardManager.getCreatedTeams().getOrDefault(uuid, "")))
                 .entrySet()
@@ -185,50 +153,32 @@ public class MorePlayersManager {
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (e1, e2) -> e1, LinkedHashMap::new));
 
         if (teams.size() != uuids.size()) {
-//            plugin.getLogger().error("Failed to sort more players for " + target.getUsername() + " as teams size != uuids size :" + teams.size() + " != " + uuids.size());
             return List.of();
         }
 
-        final List<UUID> sorted = new ArrayList<>(teams.keySet());
-//        int index = sorted.indexOf(target.getUniqueId());
-//
-//        if (index == -1) {
-//            plugin.getLogger().error("Failed to sort more players for " + target.getUsername() + " as index == -1");
-//            return List.of();
-//        }
-
-        return sorted;
+        return new ArrayList<>(teams.keySet());
     }
 
     private void updateMorePlayersEntry(@NotNull TabPlayer tabPlayer, int count, @NotNull UUID entry) {
         if (count <= 0) {
-            if (tabPlayer.getPlayer().getUsername().equals("AlexDev_")) {
-                System.out.println("Reset");
-            }
             resetMorePlayersEntry(tabPlayer, entry);
             return;
         }
-        String whoCalled = Thread.currentThread().getStackTrace()[2].getClassName() + "." + Thread.currentThread().getStackTrace()[2].getMethodName() + ":" + Thread.currentThread().getStackTrace()[2].getLineNumber();
-        final String text = tabPlayer.getGroup().morePlayers().text().replaceAll("%more_players%", String.valueOf(count));
-        Placeholder.replace(text, plugin, tabPlayer).thenAccept(more -> {
-            tabPlayer.getPlayer().getTabList().getEntry(entry).ifPresentOrElse(tabListEntry -> {
-                if (tabPlayer.getPlayer().getUsername().equals("AlexDev_")) {
-                    System.out.println("Setting AlexDev_ to here 3 " + entry + " " + whoCalled + " " + PlainTextComponentSerializer.plainText().serialize(tabListEntry.getDisplayNameComponent().get()));
-                }
-                tabListEntry.setDisplayName(plugin.getFormatter().format(text, tabPlayer, plugin));
-            }, () -> plugin.getLogger().error("Failed to update more players entry for " + tabPlayer.getPlayer().getUsername() + " " + whoCalled));
-        }).exceptionally(e -> {
+        final String text = tabPlayer.getGroup().morePlayers().text().replaceAll("%more_players%", String.valueOf(count + 1));
+        Placeholder.replace(text, plugin, tabPlayer).thenAccept(more ->
+                tabPlayer.getPlayer().getTabList().getEntry(entry).ifPresentOrElse(tabListEntry ->
+                                tabListEntry.setDisplayName(plugin.getFormatter().format(text, tabPlayer, plugin)),
+                        () -> plugin.getLogger().error("Failed to update more players entry for " + tabPlayer.getPlayer().getUsername()))).exceptionally(e -> {
             plugin.log(Level.ERROR, "Failed to update more players for " + tabPlayer.getPlayer().getUsername(), e);
             return null;
         });
     }
 
     private void resetMorePlayersEntry(@NotNull TabPlayer tabPlayer, @NotNull UUID entry) {
-        plugin.getTabList().getTabPlayer(entry).ifPresent(t -> {
-            tabPlayer.getPlayer().getTabList().getEntry(entry).ifPresentOrElse(tabListEntry -> {
-                tabListEntry.setDisplayName(t.getLastDisplayName());
-            }, () -> plugin.getLogger().error("Failed to reset more players entry for " + tabPlayer.getPlayer().getUsername()));
-        });
+        plugin.getTabList().getTabPlayer(entry).ifPresent(t ->
+                tabPlayer.getPlayer().getTabList().getEntry(entry).ifPresentOrElse(tabListEntry ->
+                                tabListEntry.setDisplayName(t.getLastDisplayName()),
+                        () -> plugin.getLogger().error("Failed to reset more players entry for " + tabPlayer.getPlayer().getUsername())));
     }
 
 
