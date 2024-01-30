@@ -43,6 +43,8 @@ public interface ConfigProvider {
     @NotNull
     YamlConfigurationProperties.Builder<?> YAML_CONFIGURATION_PROPERTIES = YamlConfigurationProperties.newBuilder()
             .charset(StandardCharsets.UTF_8)
+            .outputNulls(true)
+            .inputNulls(false)
             .setNameFormatter(NameFormatters.LOWER_UNDERSCORE);
 
     Velocitab getPlugin();
@@ -145,7 +147,8 @@ public interface ConfigProvider {
         YamlConfigurations.save(
                 getConfigDirectory().resolve("tab_groups.yml"),
                 TabGroups.class,
-                getTabGroups()
+                getTabGroups(),
+                YAML_CONFIGURATION_PROPERTIES.header(TabGroups.CONFIG_HEADER).build()
         );
     }
 

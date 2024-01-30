@@ -65,7 +65,7 @@ public class UpdateTeamsPacket implements MinecraftPacket {
     }
 
     @NotNull
-    protected static UpdateTeamsPacket create(@NotNull Velocitab plugin, @Nullable TabPlayer tabPlayer,
+    protected static UpdateTeamsPacket create(@NotNull Velocitab plugin, @NotNull TabPlayer tabPlayer,
                                               @NotNull String teamName,
                                               @NotNull Nametag nametag,
                                               @NotNull String... teamMembers) {
@@ -75,10 +75,10 @@ public class UpdateTeamsPacket implements MinecraftPacket {
                 .displayName(Component.empty())
                 .friendlyFlags(List.of(FriendlyFlag.CAN_HURT_FRIENDLY))
                 .nametagVisibility(isNametagPresent(nametag, plugin) ? NametagVisibility.ALWAYS : NametagVisibility.NEVER)
-                .collisionRule(CollisionRule.ALWAYS)
+                .collisionRule(tabPlayer.getGroup().collision() ? CollisionRule.ALWAYS : CollisionRule.NEVER)
                 .color(getLastColor(nametag.prefix(), plugin))
-                .prefix(tabPlayer != null ? nametag.getPrefixComponent(plugin, tabPlayer) : Component.empty())
-                .suffix(tabPlayer != null ? nametag.getSuffixComponent(plugin, tabPlayer) : Component.empty())
+                .prefix(nametag.getPrefixComponent(plugin, tabPlayer))
+                .suffix(nametag.getSuffixComponent(plugin, tabPlayer))
                 .entities(Arrays.asList(teamMembers));
     }
 
@@ -100,7 +100,7 @@ public class UpdateTeamsPacket implements MinecraftPacket {
                 .displayName(Component.empty())
                 .friendlyFlags(List.of(FriendlyFlag.CAN_HURT_FRIENDLY))
                 .nametagVisibility(isNametagPresent(nametag, plugin) ? NametagVisibility.ALWAYS : NametagVisibility.NEVER)
-                .collisionRule(CollisionRule.ALWAYS)
+                .collisionRule(tabPlayer.getGroup().collision() ? CollisionRule.ALWAYS : CollisionRule.NEVER)
                 .color(getLastColor(nametag.prefix(), plugin))
                 .prefix(nametag.getPrefixComponent(plugin, tabPlayer))
                 .suffix(nametag.getSuffixComponent(plugin, tabPlayer));

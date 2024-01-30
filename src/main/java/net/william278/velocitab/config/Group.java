@@ -41,6 +41,7 @@ public record Group(
         List<String> servers,
         List<String> sortingPlaceholders,
         MorePlayers morePlayers,
+        boolean collision,
         int headerFooterUpdateRate,
         int placeholderUpdateRate
 ) {

@@ -56,6 +56,7 @@ public class TabGroups implements ConfigValidator {
             List.of("lobby", "survival", "creative", "minigames", "skyblock", "prison", "hub"),
             List.of("%role_weight%", "%username_lower%"),
             new Group.MorePlayers(true, "&cand %more_players% more..."),
+            false,
             1000,
             1000
     );
@@ -118,7 +119,7 @@ public class TabGroups implements ConfigValidator {
             return;
         }
 
-        missingKeys.forEach((group, keys) -> {
+        missingKeys.asMap().forEach((group, keys) -> {
             plugin.log("Missing required key(s) " + keys + " for group " + group.name());
             plugin.log("Using default values for group " + group.name());
 
@@ -133,12 +134,14 @@ public class TabGroups implements ConfigValidator {
                     group.servers() == null ? DEFAULT_GROUP.servers() : group.servers(),
                     group.sortingPlaceholders() == null ? DEFAULT_GROUP.sortingPlaceholders() : group.sortingPlaceholders(),
                     group.morePlayers() == null ? DEFAULT_GROUP.morePlayers() : group.morePlayers(),
+                    group.collision(),
                     group.headerFooterUpdateRate(),
                     group.placeholderUpdateRate()
             );
 
             groups.add(group);
         });
+
 
         plugin.saveTabGroups();
     }

@@ -90,7 +90,6 @@ public class MorePlayersManager {
             return;
         }
 
-
         final boolean invalid = uuids.size() < MAX_PLAYERS;
         if (invalid && remove) {
             final UUID uuid = userCache.getOrDefault(target.getUniqueId(), null);
