@@ -124,23 +124,14 @@ public class MorePlayersManager {
                 return;
             }
 
-            if (tabPlayer.getPlayer().getUsername().equals("AlexDev_")) {
-                plugin.getLogger().info("Here " + sorted.size() + " " + uuids.size() + " " + index);
-            }
-
             updateMorePlayersEntry(tabPlayer, uuids.size() - MAX_PLAYERS, sorted.get(MAX_PLAYERS - 1));
         } else if (!invalid) {
             final UUID uuid = userCache.get(tabPlayer.getPlayer().getUniqueId());
             if (uuid == null) {
-                if (tabPlayer.getPlayer().getUsername().equals("AlexDev_")) {
-                    plugin.getLogger().info("AlexDev_ is null");
-                }
                 resetMorePlayersEntry(tabPlayer, uuids.get(MAX_PLAYERS - 1));
                 return;
             }
-            if (uuid.equals(target.getUniqueId())) {
-                updateMorePlayersEntry(tabPlayer, uuids.size() - MAX_PLAYERS - 1, uuid);
-            } else {
+            if (!uuid.equals(target.getUniqueId())) {
                 List<UUID> sorted = getSortedUUIDs(uuids);
                 final UUID old = sorted.get(MAX_PLAYERS - 1);
                 resetMorePlayersEntry(tabPlayer, uuid);
@@ -157,9 +148,9 @@ public class MorePlayersManager {
                 .sorted(Map.Entry.comparingByValue())
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (e1, e2) -> e1, LinkedHashMap::new));
 
-        if (teams.size() != uuids.size()) {
-            return List.of();
-        }
+//        if (teams.size() != uuids.size()) {
+//            return List.of();
+//        }
 
         return new ArrayList<>(teams.keySet());
     }
@@ -182,8 +173,9 @@ public class MorePlayersManager {
 
     private void resetMorePlayersEntry(@NotNull TabPlayer tabPlayer, @NotNull UUID entry) {
         plugin.getTabList().getTabPlayer(entry).ifPresent(t ->
-                tabPlayer.getPlayer().getTabList().getEntry(entry).ifPresent(tabListEntry ->
-                        tabListEntry.setDisplayName(t.getLastDisplayName())));
+                tabPlayer.getPlayer().getTabList().getEntry(entry).ifPresentOrElse(tabListEntry ->
+                                tabListEntry.setDisplayName(t.getLastDisplayName())
+                        , () -> plugin.getLogger().error("Failed to reset more players entry for " + tabPlayer.getPlayer().getUsername())));
     }
 
 
