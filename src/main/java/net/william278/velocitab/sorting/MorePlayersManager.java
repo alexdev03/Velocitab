@@ -54,7 +54,7 @@ public class MorePlayersManager {
                 tabPlayerOptional2.ifPresent(tabPlayer2 ->
                         tabPlayer.getPlayer().getTabList().getEntry(uuid2).ifPresentOrElse(tabListEntry ->
                                         tabListEntry.setDisplayName(tabPlayer2.getLastDisplayName()),
-                                () -> plugin.getLogger().error("Failed to remove more players entry for " + tabPlayer.getPlayer().getUsername())));
+                                () -> plugin.getLogger().error("Failed to remove more players entry for {}", tabPlayer.getPlayer().getUsername())));
             });
         });
     }
@@ -91,6 +91,7 @@ public class MorePlayersManager {
         }
 
         final boolean invalid = uuids.size() < MAX_PLAYERS;
+        //less than MAX_PLAYERS entries and action is to remove
         if (invalid && remove) {
             final UUID uuid = userCache.getOrDefault(target.getUniqueId(), null);
             //should happen when uuids.size == MAX_PLAYERS - 1
@@ -104,6 +105,7 @@ public class MorePlayersManager {
                         entry.setDisplayName(tabPlayerOptional.map(TabPlayer::getLastDisplayName)
                                 .orElse(Component.text("Error " + uuid))));
             }
+            //should happen when uuids.size < MAX_PLAYERS - 1 and a new player is added
         } else if (!invalid && !remove) {
             final List<UUID> sorted = getSortedUUIDs(uuids);
             int index = sorted.indexOf(target.getUniqueId());
@@ -125,6 +127,7 @@ public class MorePlayersManager {
             }
 
             updateMorePlayersEntry(tabPlayer, uuids.size() - MAX_PLAYERS, sorted.get(MAX_PLAYERS - 1));
+            //should happen when uuids.size == MAX_PLAYERS - 1 and a player is removed
         } else if (!invalid) {
             final UUID uuid = userCache.get(tabPlayer.getPlayer().getUniqueId());
             if (uuid == null) {
@@ -140,6 +143,7 @@ public class MorePlayersManager {
         }
     }
 
+    @NotNull
     private List<UUID> getSortedUUIDs(@NotNull Collection<UUID> uuids) {
         final Map<UUID, String> teams = uuids.stream()
                 .collect(Collectors.toMap(uuid -> uuid, uuid -> scoreboardManager.getCreatedTeams().getOrDefault(uuid, "")))
@@ -147,10 +151,6 @@ public class MorePlayersManager {
                 .stream()
                 .sorted(Map.Entry.comparingByValue())
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (e1, e2) -> e1, LinkedHashMap::new));
-
-//        if (teams.size() != uuids.size()) {
-//            return List.of();
-//        }
 
         return new ArrayList<>(teams.keySet());
     }
@@ -175,7 +175,7 @@ public class MorePlayersManager {
         plugin.getTabList().getTabPlayer(entry).ifPresent(t ->
                 tabPlayer.getPlayer().getTabList().getEntry(entry).ifPresentOrElse(tabListEntry ->
                                 tabListEntry.setDisplayName(t.getLastDisplayName())
-                        , () -> plugin.getLogger().error("Failed to reset more players entry for " + tabPlayer.getPlayer().getUsername())));
+                        , () -> plugin.getLogger().error("Failed to reset more players entry for {}", tabPlayer.getPlayer().getUsername())));
     }
 
 
