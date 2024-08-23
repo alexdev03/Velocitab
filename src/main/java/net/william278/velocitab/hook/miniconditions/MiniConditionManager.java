@@ -138,9 +138,9 @@ public class MiniConditionManager {
             condition = condition.replace(entry.getValue(), entry.getKey());
             condition = condition.replace(entry.getKey() + entry.getKey(), entry.getKey());
         }
-        for (Map.Entry<String, String> entry : REPLACE_2.entrySet()) {
-            condition = condition.replace(entry.getValue(), entry.getKey());
-        }
+        //for (Map.Entry<String, String> entry : REPLACE_2.entrySet()) {
+        //    condition = condition.replace(entry.getValue(), entry.getKey());
+        //}
         return condition;
     }
 
