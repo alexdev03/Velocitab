@@ -3,7 +3,9 @@ name: CI Tests & Publish
 
 on:
   push:
-    branches: [ 'master' 'fix-compilation']
+    branches:
+      - 'master'
+      - 'fix-compilation'
     paths-ignore:
       - 'docs/**'
       - 'workflows/**'
