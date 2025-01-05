@@ -65,7 +65,7 @@ public class Role implements Comparable<Role> {
     }
 
     @NotNull
-    protected String getWeightString() {
+    public String getWeightString() {
         return Integer.toString(weight);
     }
 
